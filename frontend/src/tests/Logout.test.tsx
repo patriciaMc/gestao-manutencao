@@ -1,16 +1,12 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { App } from '../App';
 import { mockFetch } from './mock-fetch';
-import { encerrarSessaoInstitucional } from '../utils/navegacao';
-
-vi.mock('../utils/navegacao', () => ({ recarregarNoInicio: vi.fn(), encerrarSessaoInstitucional: vi.fn(), irParaLoginInstitucional: vi.fn() }));
-
 describe('Sair', () => {
   afterEach(() => localStorage.clear());
 
-  it('esmaece o app e vai direto ao Keycloak', async () => {
+  it('esmaece o app, encerra a sessão e mostra o login', async () => {
     localStorage.setItem('sgp_token', 'token-teste');
     mockFetch({
       '/auth/me': {
@@ -28,10 +24,8 @@ describe('Sair', () => {
     expect(container.querySelector('.app-shell--saindo')).not.toBeNull();
     expect(screen.queryByRole('link', { name: 'Entrar' })).not.toBeInTheDocument();
 
-    // depois da animação, a sessão é descartada e o navegador segue ao Keycloak, sem mostrar o login antes
-    await waitFor(() => expect(encerrarSessaoInstitucional).toHaveBeenCalledWith('/api'), { timeout: 2000 });
+    expect(await screen.findByRole('button', { name: 'Entrar' })).toBeInTheDocument();
     expect(localStorage.getItem('sgp_token')).toBeNull();
-    expect(screen.queryByRole('link', { name: 'Entrar' })).not.toBeInTheDocument();
   });
 });
 

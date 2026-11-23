@@ -1,28 +1,46 @@
-import { useEffect } from 'react';
-import { API_URL } from '../api/client';
-import { TelaCarregando } from '../components/TelaCarregando';
-import { irParaLoginInstitucional } from '../utils/navegacao';
+import { useState, type FormEvent } from 'react';
+import { useAuth } from '../auth/AuthContext';
+import { LogoSistema } from '../components/LogoSistema';
+import './Login.css';
 
-const URL_LOGIN = `${API_URL}/auth/oidc/login`;
-
-// Sem sessão não há tela de login: o navegador segue direto ao Keycloak da Prefeitura, e enquanto isso fica só o
-// carregando. Se o login falhou (o backend volta com ?erro=login, ou a sessão não pôde ser aberta), mostra o erro
-// com a opção de tentar de novo, e não redireciona sozinho, para a falha não virar um ciclo.
 export function Login({ falha = false }: { falha?: boolean }) {
-  const falhou = falha || new URLSearchParams(window.location.search).get('erro') === 'login';
+  const { entrar } = useAuth();
+  const [email, setEmail] = useState('');
+  const [senha, setSenha] = useState('');
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState(falha ? 'Não foi possível restaurar a sessão. Entre novamente.' : '');
 
-  useEffect(() => {
-    if (!falhou) irParaLoginInstitucional(API_URL);
-  }, [falhou]);
-
-  if (!falhou) return <TelaCarregando />;
+  async function enviar(evento: FormEvent<HTMLFormElement>) {
+    evento.preventDefault();
+    if (enviando) return;
+    setEnviando(true);
+    setErro('');
+    try {
+      await entrar(email, senha);
+    } catch (falha) {
+      setErro(falha instanceof Error ? falha.message : 'Não foi possível entrar. Tente novamente.');
+      setEnviando(false);
+    }
+  }
 
   return (
-    <TelaCarregando alerta>
-      <p className="tela-carregando-mensagem">Não foi possível entrar. Tente novamente em instantes.</p>
-      <a className="btn btn-primary" href={URL_LOGIN}>
-        Tentar novamente
-      </a>
-    </TelaCarregando>
+    <main className="login-pagina" aria-labelledby="login-titulo">
+      <form className="login-formulario" onSubmit={enviar}>
+        <LogoSistema tamanho={48} />
+        <h1 id="login-titulo">Gestão Patrimonial</h1>
+        <div className="field">
+          <label htmlFor="login-email">E-mail</label>
+          <input id="login-email" type="email" autoComplete="username" maxLength={254} required value={email} onChange={(e) => setEmail(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="login-senha">Senha</label>
+          <input id="login-senha" type="password" autoComplete="current-password" maxLength={256} required value={senha} onChange={(e) => setSenha(e.target.value)} />
+        </div>
+        {erro && <p className="login-erro" role="alert">{erro}</p>}
+        <button className="btn btn-primary" type="submit" disabled={enviando}>
+          {enviando ? 'Entrando…' : 'Entrar'}
+        </button>
+      </form>
+    </main>
   );
 }

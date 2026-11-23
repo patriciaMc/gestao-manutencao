@@ -19,7 +19,7 @@ const GRUPOS_NA_TELA: Array<{ grupo: string; permissoes: ReadonlyArray<{ id: str
 ];
 import type { UsuarioLista } from './Usuarios';
 
-const VAZIO = { nome: '', email: '', matricula: '', perfil: '', unidadeId: '', prestadorId: '', ativo: true, usuarioTeste: false, permissoes: [] as string[] };
+const VAZIO = { senha: '', nome: '', email: '', matricula: '', perfil: '', unidadeId: '', prestadorId: '', ativo: true, usuarioTeste: false, permissoes: [] as string[] };
 
 export function UsuarioFormulario() {
   const { id } = useParams();
@@ -55,6 +55,7 @@ export function UsuarioFormulario() {
       return;
     }
     const valores = {
+      senha: '',
       nome: encontrado.nome,
       email: encontrado.email,
       matricula: encontrado.matricula,
@@ -89,16 +90,18 @@ export function UsuarioFormulario() {
           prestadorId: form.perfil === 'TERCEIRIZADA' ? form.prestadorId || null : null,
           ativo: form.ativo,
           usuarioTeste: form.usuarioTeste,
+          ...(form.senha ? { senha: form.senha } : {}),
           ...(form.perfil === 'OPERADOR' ? { permissoes: form.permissoes } : {}),
         });
       } else {
-        // Cadastro prévio: só e-mail e perfil (mais unidade ou prestador, quando o perfil exige)
+        // Unidade ou prestador são informados conforme o perfil.
         await api.post('/usuarios', {
           email: form.email,
           perfil: form.perfil,
           unidadeId: form.perfil === 'UNIDADE' || form.perfil === 'GALPAO' ? form.unidadeId || null : null,
           prestadorId: form.perfil === 'TERCEIRIZADA' ? form.prestadorId || null : null,
           usuarioTeste: form.usuarioTeste,
+          ...(form.senha ? { senha: form.senha } : {}),
           ...(form.perfil === 'OPERADOR' ? { permissoes: form.permissoes } : {}),
         });
       }
@@ -158,6 +161,24 @@ export function UsuarioFormulario() {
               disabled={editando || bloqueado}
               required
             />
+          </div>
+          <div className="field">
+            <label htmlFor="usuario-senha">{editando ? 'Nova senha' : 'Senha inicial'}</label>
+            <input
+              id="usuario-senha"
+              type="password"
+              autoComplete="new-password"
+              minLength={15}
+              maxLength={256}
+              value={form.senha}
+              onChange={(e) => setForm({ ...form, senha: e.target.value })}
+              disabled={bloqueado}
+              aria-describedby="usuario-senha-instrucao"
+            />
+            <small id="usuario-senha-instrucao">
+              {editando ? 'Deixe em branco para manter a senha. ' : 'Defina uma senha para liberar o login. '}
+              Mínimo de 15 caracteres.
+            </small>
           </div>
           {editando && (
             <div className="field">

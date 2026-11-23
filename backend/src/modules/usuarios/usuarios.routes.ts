@@ -8,6 +8,7 @@ import { validarBody } from '../../middlewares/validate';
 import { AppError } from '../../errors/AppError';
 import { registrarAuditoria } from '../../services/auditoria.service';
 import { Permissao, TODAS_PERMISSOES } from '../../lib/permissoes';
+import { gerarHashSenha, schemaNovaSenha } from '../auth/senha';
 import { confirmarAdministradorNoBanco } from './administrador';
 
 // RF02 — o administrador (Administrador) cadastra usuários
@@ -43,8 +44,9 @@ usuariosRouter.get('/', async (_req, res) => {
 const permissoesSchema = z.array(z.enum(TODAS_PERMISSOES)).transform((l) => [...new Set(l)]);
 
 const criarSchema = z.object({
-  // Cadastro prévio: basta e-mail e perfil. Nome e matrícula são provisórios e o primeiro login pelo Keycloak os substitui.
+  // Nome e matrícula têm valores provisórios se forem omitidos no cadastro.
   nome: z.string().min(3).optional(),
+  senha: schemaNovaSenha.optional(),
   email: z.string().email().transform((e) => e.trim().toLowerCase()),
   matricula: z.string().min(1).optional(),
   perfil: z.nativeEnum(Perfil),
@@ -72,7 +74,7 @@ usuariosRouter.post('/', validarBody(criarSchema), async (req, res) => {
   const nome: string = req.body.nome ?? email.split('@')[0];
   const matricula: string = req.body.matricula ?? email;
   const jaExiste = await prisma.usuario.findFirst({
-    where: { OR: [{ email }, { matricula }] },
+    where: { OR: [{ email: { equals: email, mode: 'insensitive' } }, { matricula }] },
   });
   if (jaExiste) {
     throw new AppError('Já existe usuário com este e-mail ou matrícula.', 409);
@@ -91,6 +93,7 @@ usuariosRouter.post('/', validarBody(criarSchema), async (req, res) => {
       unidadeId: unidadeId ?? null,
       prestadorId: prestadorId ?? null,
       usuarioTeste: req.body.usuarioTeste ?? false,
+      ...(req.body.senha !== undefined ? { senhaHash: await gerarHashSenha(req.body.senha) } : {}),
     },
     select: usuarioSelect,
   });
@@ -106,6 +109,7 @@ usuariosRouter.post('/', validarBody(criarSchema), async (req, res) => {
 
 const atualizarSchema = z.object({
   nome: z.string().min(3).optional(),
+  senha: schemaNovaSenha.optional(),
   perfil: z.nativeEnum(Perfil).optional(),
   permissoes: permissoesSchema.optional(),
   unidadeId: z.string().uuid().nullable().optional(),
@@ -120,7 +124,7 @@ usuariosRouter.patch('/:id', validarBody(atualizarSchema), async (req, res) => {
     select: usuarioSelect,
   });
   if (!antes) throw new AppError('Usuário não encontrado.', 404);
-  const dados = req.body;
+  const { senha, ...dados } = req.body;
 
   // Perfil e prestador precisam continuar coerentes depois da edição
   const perfilFinal = (dados.perfil ?? antes.perfil) as Perfil;
@@ -160,6 +164,7 @@ usuariosRouter.patch('/:id', validarBody(atualizarSchema), async (req, res) => {
 
   // Conferência e gravação na mesma transação, com os administradores travados: dois pedidos simultâneos
   // (um tirando a permissão de cada um dos dois últimos) esperam um ao outro e o segundo enxerga o resultado do primeiro.
+  const senhaHash = senha === undefined ? undefined : await gerarHashSenha(senha);
   const usuario = await prisma.$transaction(async (tx) => {
     if (eraAdministrador && !continuaAdministrador) {
       await tx.$queryRaw`SELECT id FROM usuario WHERE ativo = true AND perfil = 'OPERADOR' AND 'USUARIOS_ADMINISTRAR' = ANY(permissoes) FOR UPDATE`;
@@ -175,7 +180,7 @@ usuariosRouter.patch('/:id', validarBody(atualizarSchema), async (req, res) => {
     }
     const atualizado = await tx.usuario.update({
       where: { id: req.params.id },
-      data: dados,
+      data: { ...dados, ...(senhaHash === undefined ? {} : { senhaHash }) },
       select: usuarioSelect,
     });
     await registrarAuditoria(
@@ -185,7 +190,7 @@ usuariosRouter.patch('/:id', validarBody(atualizarSchema), async (req, res) => {
         entidade: 'usuario',
         entidadeId: atualizado.id,
         dadosAntes: antes,
-        dadosDepois: atualizado,
+        dadosDepois: { ...atualizado, ...(senhaHash === undefined ? {} : { senhaRedefinida: true }) },
       },
       tx,
     );

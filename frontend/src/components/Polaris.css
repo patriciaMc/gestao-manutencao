@@ -1000,7 +1000,7 @@
 .gestao-lista tbody tr:nth-child(n+6) { animation-delay: .15s; }
 @media (prefers-reduced-motion: reduce) { .gestao-lista tbody tr { animation: none; } }
 
-/* Saída: o app some com um fade antes de ir ao Keycloak */
+/* Saída: o app some com um fade antes de mostrar o formulário de login */
 @keyframes app-saida{ from { opacity: 1; } to { opacity: 0; } }
 .app-shell.app-shell--saindo { animation: app-saida .35s ease forwards; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .app-shell.app-shell--saindo { animation: none; } }

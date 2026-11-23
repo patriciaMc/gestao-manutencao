@@ -19,7 +19,6 @@ Copie `.env.example` para `.env` na raiz do repositório e ajuste os valores:
 | `NODE_ENV` | Ambiente da API. Em `production` (imagem Docker) a API exige `JWT_SECRET` forte e não aceita origens CORS externas por padrão | `development` |
 | `JWT_SECRET` | Segredo de assinatura dos tokens JWT. **Obrigatório e com no mínimo 32 caracteres em produção** — a API não inicia sem isso (ex.: `openssl rand -hex 32`) | `troque-este-segredo-em-producao` |
 | `JWT_EXPIRES_IN` | Duração da sessão (RF04): o token expira após esse tempo e o usuário precisa entrar de novo | `12h` |
-| `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_REDIRECT_URI`, `OIDC_POST_LOGOUT_URI` | Login pelo Keycloak da Prefeitura. **Obrigatórias em produção** (a API não inicia sem elas). `OIDC_CLIENT_SECRET` vai em Secrets; as URIs precisam ser idênticas às cadastradas no client (o callback é `<site>/api/auth/callback`) | — |
 | `CORS_ORIGINS` | Origens extras autorizadas a chamar a API pelo navegador, separadas por vírgula. Normalmente vazio: em produção o frontend usa o mesmo domínio (`/api` via Nginx) | vazio |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Configuração do SMTP institucional para notificações por e-mail | ver `.env.example` |
 | `SMTP_ENABLED` | Liga/desliga o envio real de e-mail — em dev, deixe `false` para só registrar as notificações | `false` |
@@ -48,6 +47,19 @@ O Postgres só lê usuário, senha e nome do banco na **primeira criação do vo
 
 - **Servidor novo (banco vazio):** cadastre os três valores no GitHub antes do primeiro deploy.
 - **Servidor com banco já em uso (mantendo os dados):** `POSTGRES_USER` e `POSTGRES_DB` devem repetir o que o banco já tem (hoje `sgp` e `sgp`). Antes do deploy, troque a senha dentro do banco para o valor que vai cadastrar: `docker compose exec db psql -U sgp -d sgp -c "ALTER USER sgp WITH PASSWORD '<nova senha>'"`. Só depois cadastre o secret e faça o deploy; se o secret mudar sem a troca no banco, a API perde a conexão.
+
+## Primeiro acesso
+
+Depois de aplicar as migrações, defina uma senha local para uma conta administradora existente. Em uma instalação vazia, acrescente `--criar-administrador` ao comando para criar a primeira conta. Use um e-mail seu e uma senha de pelo menos 15 caracteres. A leitura silenciosa evita colocar a senha no histórico do terminal ou nos argumentos do comando.
+
+```bash
+read -r -s -p 'Senha local: ' senha_sgp
+printf '\n'
+printf '%s\n' "$senha_sgp" | docker compose exec -T api node dist/scripts/definir-senha.js admin@exemplo.org
+unset senha_sgp
+```
+
+Em desenvolvimento sem Docker, com `DATABASE_URL` configurada, o equivalente é `npx tsx src/scripts/definir-senha.ts admin@exemplo.org` dentro de `backend/`, com a senha fornecida pela entrada padrão. Use **Configurações › Usuários** para definir a senha das outras contas. Na web, coloque o frontend e a API atrás de HTTPS.
 
 ## Rodando com Docker Compose
 

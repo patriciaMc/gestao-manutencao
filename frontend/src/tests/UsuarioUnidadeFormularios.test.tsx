@@ -73,14 +73,14 @@ afterEach(() => {
 });
 
 describe('Formulário de usuário', () => {
-  it('o cadastro novo pede só e-mail e perfil; a unidade aparece quando o perfil exige', async () => {
+  it('o cadastro permite definir a senha inicial; a unidade aparece quando o perfil exige', async () => {
     const chamadas = rotas();
     abrir('/configuracoes/usuarios/novo');
 
     await userEvent.type(await campo('E-mail'), 'maria@joinville.sc.gov.br');
     expect(screen.queryByLabelText('Nome completo')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Matrícula')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/senha/i)).not.toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('Senha inicial'), 'senha inicial de teste');
     expect(screen.queryByLabelText('Unidade')).not.toBeInTheDocument();
     expect(screen.queryByRole('option', { name: 'Sem acesso' })).not.toBeInTheDocument();
 
@@ -93,6 +93,7 @@ describe('Formulário de usuário', () => {
     const post = chamadas.find((c) => c.init?.method === 'POST' && c.url.endsWith('/usuarios'));
     expect(JSON.parse(String(post?.init?.body))).toEqual({
       email: 'maria@joinville.sc.gov.br',
+      senha: 'senha inicial de teste',
       perfil: 'UNIDADE',
       unidadeId: 'un1',
       prestadorId: null,

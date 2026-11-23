@@ -6,10 +6,10 @@ Extraído da seção 2.3–2.5 do [RFC v1.0](https://github.com/victor-moy/gesta
 
 | ID | Requisito |
 |---|---|
-| RF01 | O sistema deve permitir que o usuário realize login com a conta institucional da Prefeitura (Keycloak, OpenID Connect). O Keycloak só autentica; perfil e unidade são do SGP. Quem já está cadastrado é vinculado pelo e-mail no primeiro login; quem é novo entra como `SEM_ACESSO` (vê só a tela inicial, vazia) até um Administrador atribuir o perfil. |
+| RF01 | O usuário entra com e-mail e senha de uma conta ativa cadastrada no SGP. A conta mantém o perfil, as permissões e o vínculo definidos pela administração. |
 | RF02 | O sistema deve permitir que um operador com a permissão de administrar usuários cadastre usuários e atribua perfis, em Configurações › Usuários. Para o perfil **Operador** o cadastro traz a seção **Permissões do operador**, com uma caixa por permissão (manutenções: consultar, escrever, triar, avaliação técnica, vistorias, preparar e conferir medições e fiscalizar; e uma permissão por área: contratos, atas, estoque, relatórios, solicitações, inventário, configurações e usuários), de modo que cada operador tem as suas. As permissões valem a partir do próximo login do operador (menos nesta própria área: quem perdeu a administração de usuários ou foi desativado é barrado na hora, porque o sistema confere no banco a cada pedido), são auditadas (antes e depois) e o sistema não deixa tirar a administração de usuários do último operador ativo que a tem. Vistorias e preparar/conferir medições são guardadas, mas só passam a bloquear ações quando essas funções existirem. Inclui matrícula funcional (feedback 12/05/2026). |
 | RF03 | O sistema deve restringir o acesso a funcionalidades de acordo com o perfil do usuário autenticado. |
-| RF04 | O sistema deve manter sessão autenticada com expiração automática (duração configurável, 12 horas por padrão); ao expirar, o usuário entra novamente. Sem sessão, o sistema leva direto ao login do Keycloak, sem tela intermediária; se o login falhar, mostra uma mensagem com a opção de tentar de novo. |
+| RF04 | A sessão autenticada expira automaticamente após o prazo configurado, de 12 horas por padrão. O sistema apresenta o formulário de login na ausência de uma sessão válida. |
 
 ## Gestão de Patrimônio
 
@@ -128,7 +128,7 @@ Extraído da seção 2.3–2.5 do [RFC v1.0](https://github.com/victor-moy/gesta
 
 | ID | Requisito |
 |---|---|
-| RNF04 | O sistema deve utilizar autenticação segura. A senha não é guardada no SGP: a autenticação é delegada ao Keycloak da Prefeitura (OpenID Connect com PKCE) e a sessão do SGP é um JWT de curta duração. |
+| RNF04 | O SGP armazena apenas o hash scrypt com salt individual para cada senha local. A sessão usa JWT com expiração e o login aplica limites por IP e por IP com e-mail. |
 | RNF05 | O sistema deve implementar controle de acesso baseado em perfis (RBAC), garantindo que cada usuário acesse apenas as funcionalidades permitidas ao seu perfil. |
 | RNF06 | O sistema deve registrar logs de auditoria para todas as ações críticas: aprovações, negações, baixas, cessões e alterações de tombamento. |
 | RNF07 | O sistema deve utilizar comunicação HTTPS em todas as requisições. |

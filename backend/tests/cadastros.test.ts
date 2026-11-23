@@ -2,6 +2,7 @@ import request from 'supertest';
 import { prismaMock } from './prisma-mock';
 import { criarApp } from '../src/app';
 import { auth, mockUsuarioFindFirst } from './helpers';
+import { verificarSenha } from '../src/modules/auth/senha';
 
 const app = criarApp();
 const UUID = '4fa8b6a4-6f7e-4f7e-8b6a-46f7e4f7e8b6';
@@ -48,6 +49,22 @@ describe('Usuários (RF02)', () => {
     expect(prismaMock.usuario.create.mock.calls[0][0].data).not.toHaveProperty('senhaHash');
   });
 
+  it('redefine a senha local com hash e audita a operação sem registrar credenciais', async () => {
+    const senha = 'nova senha local de teste';
+    prismaMock.usuario.findUnique.mockResolvedValue({ id: 'u-1', perfil: 'UNIDADE', ativo: true, unidadeId: UUID, prestadorId: null } as never);
+    prismaMock.usuario.update.mockResolvedValue({ id: 'u-1' } as never);
+    const res = await request(app).patch('/usuarios/u-1').set(auth('OPERADOR')).send({ senha });
+    expect(res.status).toBe(200);
+    const dados = prismaMock.usuario.update.mock.calls[0][0].data;
+    expect(dados).not.toHaveProperty('senha');
+    expect(await verificarSenha(senha, dados.senhaHash as string)).toBe(true);
+    expect(res.body).not.toHaveProperty('senhaHash');
+    const auditoria = prismaMock.logAuditoria.create.mock.calls[0][0].data;
+    expect(auditoria.dadosDepois).toMatchObject({ senhaRedefinida: true });
+    expect(JSON.stringify(auditoria)).not.toContain(senha);
+    expect(JSON.stringify(auditoria)).not.toContain(dados.senhaHash);
+  });
+
   it('o usuário de teste nasce desmarcado e pode ser marcado no cadastro e na edição, com auditoria', async () => {
     mockUsuarioFindFirst(prismaMock.usuario.findFirst);
     prismaMock.usuario.create.mockResolvedValue({ id: 'u-novo' } as never);
@@ -83,7 +100,7 @@ describe('Usuários (RF02)', () => {
 
   it('usuário terceirizado exige um prestador existente; os demais perfis não podem ter prestador', async () => {
     mockUsuarioFindFirst(prismaMock.usuario.findFirst);
-    const base = { nome: 'Técnico Tecnomed', email: 'tec@tecnomed.com.br', matricula: '30001', senha: 'senha-forte' };
+    const base = { nome: 'Técnico Tecnomed', email: 'tec@tecnomed.com.br', matricula: '30001', senha: 'senha local de teste' };
     const enviar = (corpo: Record<string, unknown>) =>
       request(app).post('/usuarios').set(auth('OPERADOR')).send({ ...base, ...corpo });
 

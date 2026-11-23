@@ -22,7 +22,7 @@ enum Perfil {
   GALPAO
   // Empresa contratada: vinculada a um prestador de serviço; só enxerga as manutenções dos contratos dele
   TERCEIRIZADA
-  // Entrou pelo Keycloak e ainda não recebeu perfil: não acessa nada até um Administrador atribuir o perfil
+  // Ainda não recebeu perfil: não acessa nada até um Administrador atribuir o perfil
   SEM_ACESSO
 }
 
@@ -182,9 +182,9 @@ model Usuario {
   nome             String
   email            String             @unique
   matricula        String             @unique
-  // Legado: ninguém entra por senha (o login é só pelo Keycloak); a coluna sai numa migração futura
+  // Hash da senha local. Contas sem senha definida não podem iniciar sessão.
   senhaHash        String?            @map("senha_hash")
-  // Identificador fixo do usuário no Keycloak (claim `sub`), gravado no primeiro login
+  // Identificador do login anterior, preservado para registros históricos.
   keycloakSub      String?            @unique @map("keycloak_sub")
   perfil           Perfil
   ativo            Boolean            @default(true)

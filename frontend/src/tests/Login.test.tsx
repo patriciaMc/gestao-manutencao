@@ -1,79 +1,49 @@
-import { render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it } from 'vitest';
 import { App } from '../App';
 import { setToken } from '../api/client';
 import { mockFetch } from './mock-fetch';
-import { irParaLoginInstitucional } from '../utils/navegacao';
 
-vi.mock('../utils/navegacao', () => ({
-  recarregarNoInicio: vi.fn(),
-  encerrarSessaoInstitucional: vi.fn(),
-  irParaLoginInstitucional: vi.fn(),
-}));
-
-describe('Login institucional (Keycloak)', () => {
+describe('Login com e-mail e senha', () => {
   afterEach(() => {
     setToken(null);
     window.history.replaceState(null, '', '/');
-    vi.mocked(irParaLoginInstitucional).mockClear();
   });
 
-  it('sem sessão não há tela de login: mostra só o carregando e segue direto ao Keycloak', async () => {
-    mockFetch({});
-    render(<App />);
-    expect(screen.queryByRole('link', { name: 'Entrar' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Gestão Patrimonial' })).not.toBeInTheDocument();
-    await waitFor(() => expect(irParaLoginInstitucional).toHaveBeenCalledWith('/api'));
-    expect(screen.getByRole('status')).toHaveTextContent('Carregando');
-  });
-
-  it('se o login falhou, mostra o erro com "Tentar novamente" e não redireciona sozinho (sem ciclo)', async () => {
-    window.history.replaceState(null, '', '/?erro=login');
-    mockFetch({});
-    render(<App />);
-    expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível entrar');
-    expect(screen.getByRole('link', { name: 'Tentar novamente' })).toHaveAttribute('href', '/api/auth/oidc/login');
-    expect(irParaLoginInstitucional).not.toHaveBeenCalled();
-  });
-
-  it('token vencido (401) leva a um novo login; erro do servidor mostra a falha em vez de repetir o login', async () => {
-    localStorage.setItem('sgp_token', 'vencido');
-    mockFetch({ '/auth/me': { status: 401, body: { mensagem: 'Sessão expirada' } } });
-    const primeira = render(<App />);
-    await waitFor(() => expect(irParaLoginInstitucional).toHaveBeenCalledWith('/api'));
-    primeira.unmount();
-
-    vi.mocked(irParaLoginInstitucional).mockClear();
-    localStorage.setItem('sgp_token', 'valido');
-    mockFetch({ '/auth/me': { status: 500, body: { mensagem: 'Erro interno' } } });
-    render(<App />);
-    expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível entrar');
-    expect(irParaLoginInstitucional).not.toHaveBeenCalled();
-  });
-
-  it('guarda o token do fragmento ao voltar do Keycloak e limpa o endereço', async () => {
-    window.history.replaceState(null, '', '/login/retorno#token=token-keycloak');
-    mockFetch({
-      '/auth/me': {
-        body: { id: '1', nome: 'Ana', email: 'ana@joinville.sc.gov.br', matricula: '1', perfil: 'UNIDADE', unidadeId: 'u1', unidadeNome: 'UBS' },
-      },
+  it('envia as credenciais e abre a sessão do usuário', async () => {
+    const usuario = { id: '1', nome: 'Ana', email: 'ana@joinville.sc.gov.br', matricula: '1', perfil: 'UNIDADE', unidadeId: 'u1', unidadeNome: 'UBS' };
+    const chamadas = mockFetch({
+      '/auth/login': { body: { token: 'token-local', usuario } },
       '/dashboard/alertas': { body: [] },
       '/conversas': { body: [] },
     });
     render(<App />);
-    expect(await screen.findByRole('heading', { name: /Bem-vindo/ })).toBeInTheDocument();
-    expect(localStorage.getItem('sgp_token')).toBe('token-keycloak');
-    expect(window.location.pathname).toBe('/');
-    expect(window.location.hash).toBe('');
+    await userEvent.type(await screen.findByLabelText('E-mail'), usuario.email);
+    await userEvent.type(screen.getByLabelText('Senha'), 'uma senha para testes');
+    await userEvent.click(screen.getByRole('button', { name: 'Entrar' }));
+    expect(await screen.findByRole('heading', { name: /Bem-vindo, Ana/ })).toBeInTheDocument();
+    const login = chamadas.find(({ url }) => url.endsWith('/auth/login'));
+    expect(JSON.parse(String(login?.init?.body))).toEqual({ email: usuario.email, senha: 'uma senha para testes' });
+    expect(localStorage.getItem('sgp_token')).toBe('token-local');
   });
 
-  it('voltar ao login sem token em /login/retorno limpa o endereço e segue ao Keycloak de novo', async () => {
-    window.history.replaceState(null, '', '/login/retorno');
-    mockFetch({});
+  it('mostra a falha e permite tentar de novo', async () => {
+    mockFetch({ '/auth/login': { status: 401, body: { mensagem: 'E-mail ou senha inválidos.' } } });
     render(<App />);
-    await waitFor(() => expect(irParaLoginInstitucional).toHaveBeenCalled());
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    expect(window.location.pathname).toBe('/');
+    await userEvent.type(await screen.findByLabelText('E-mail'), 'ana@joinville.sc.gov.br');
+    await userEvent.type(screen.getByLabelText('Senha'), 'incorreta');
+    await userEvent.click(screen.getByRole('button', { name: 'Entrar' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('E-mail ou senha inválidos.');
+    expect(screen.getByRole('button', { name: 'Entrar' })).toBeEnabled();
+    expect(localStorage.getItem('sgp_token')).toBeNull();
+  });
+
+  it('oferece novo login quando a sessão expira', async () => {
+    localStorage.setItem('sgp_token', 'vencido');
+    mockFetch({ '/auth/me': { status: 401, body: { mensagem: 'Sessão expirada' } } });
+    render(<App />);
+    expect(await screen.findByRole('button', { name: 'Entrar' })).toBeInTheDocument();
     expect(localStorage.getItem('sgp_token')).toBeNull();
   });
 

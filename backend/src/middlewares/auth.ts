@@ -72,7 +72,7 @@ const ROTAS_TERCEIRIZADA: Array<[string, RegExp]> = [
   ['POST', /^\/relatos$/],
 ];
 
-// Entrou pelo Keycloak e ainda não recebeu perfil: só a tela inicial (alertas e atualizações), que o próprio backend
+// Ainda não recebeu perfil: só a tela inicial (alertas e atualizações), que o próprio backend
 // devolve vazia para quem não tem perfil. Lista de permissão, negado por padrão.
 const ROTAS_SEM_ACESSO: Array<[string, RegExp]> = [
   ['GET', /^\/auth\/me$/],
