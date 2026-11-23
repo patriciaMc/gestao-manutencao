@@ -12,6 +12,7 @@ import {
 } from '../components/icons';
 import './Solicitacoes.css';
 import { statusExibido, tituloSolicitacao } from '../utils/solicitacao';
+import { destaqueTriagem } from '../utils/triagem';
 import { tituloManutencao } from '../utils/manutencao';
 import type { Manutencao, Solicitacao } from '../types';
 import {
@@ -106,6 +107,8 @@ const STATUS_SO_DE_MANUTENCAO = Object.entries(ROTULO_STATUS_MANUTENCAO).filter(
   ([valor]) => !(valor in ROTULO_STATUS_SOLICITACAO),
 );
 
+const FILA_TRIAGEM = 'FILA_TRIAGEM';
+
 interface LinhaLista {
   chave: string;
   id: string;
@@ -121,6 +124,7 @@ interface LinhaLista {
   rotuloLink: string;
   emenda: boolean;
   automatica: boolean;
+  destaque?: ReturnType<typeof destaqueTriagem>;
 }
 
 const daSolicitacao = (s: Solicitacao): LinhaLista => ({
@@ -155,12 +159,14 @@ const daManutencao = (m: Manutencao): LinhaLista => ({
   rotuloLink: `Ver manutenção de ${tituloManutencao(m)}`,
   emenda: false,
   automatica: false,
+  destaque: destaqueTriagem(m),
 });
 
 export function Solicitacoes() {
   const { usuario } = useAuth();
   // A terceirizada só tem manutenções; Galpão só solicitações; Administrador e Unidade, as duas
   const veManutencoes = pode(usuario, 'MANUTENCAO_CONSULTAR') || usuario?.perfil === 'UNIDADE' || usuario?.perfil === 'TERCEIRIZADA';
+  const podeTriar = veManutencoes && pode(usuario, 'MANUTENCAO_TRIAR');
   const veSolicitacoes = usuario?.perfil !== 'TERCEIRIZADA';
   const [params] = useSearchParams();
   const [linhas, setLinhas] = useState<LinhaLista[]>([]);
@@ -174,6 +180,7 @@ export function Solicitacoes() {
     statusDaUrl in ROTULO_STATUS_SOLICITACAO ||
     statusDaUrl in ROTULO_STATUS_MANUTENCAO ||
     OPCOES_STATUS_EXTRA.some((o) => o.valor === statusDaUrl);
+  const naTriagem = podeTriar && filtroTipo === FILA_TRIAGEM;
   const [filtroStatus, setFiltroStatus] = useState(statusInicialValido ? statusDaUrl : '');
   // Só chamados de manutenção: os que ninguém tocou ainda (sem mensagem no chat nem mudança de status)
   const [semInteracao, setSemInteracao] = useState(false);
@@ -199,10 +206,11 @@ export function Solicitacoes() {
     const buscarSolicitacoes =
       veSolicitacoes &&
       !semInteracao &&
+      !naTriagem &&
       filtroTipo !== TIPO_MANUTENCAO &&
       (!filtroStatus || Boolean(extra) || filtroStatus in ROTULO_STATUS_SOLICITACAO);
     const buscarManutencoes =
-      veManutencoes && (!filtroTipo || filtroTipo === TIPO_MANUTENCAO) && (!filtroStatus || filtroStatus in ROTULO_STATUS_MANUTENCAO);
+      veManutencoes && (!filtroTipo || filtroTipo === TIPO_MANUTENCAO || naTriagem) && (!filtroStatus || filtroStatus in ROTULO_STATUS_MANUTENCAO);
     const consulta = (statusBackend: string, tipo = '') => {
       const p = new URLSearchParams();
       if (busca) p.set('busca', busca);
@@ -217,12 +225,18 @@ export function Solicitacoes() {
       pedidos.push(api.get<Solicitacao[]>(`/solicitacoes?${p}`).then((l) => l.map(daSolicitacao)));
     }
     if (buscarManutencoes) {
-      pedidos.push(api.get<Manutencao[]>(`/manutencoes?${consulta(filtroStatus)}`).then((l) => l.map(daManutencao)));
+      const status = naTriagem && !filtroStatus ? ['PENDENTE_APROVACAO', 'AVALIADO'] : [filtroStatus];
+      for (const etapa of status) {
+        pedidos.push(api.get<Manutencao[]>(`/manutencoes?${consulta(etapa)}`).then((l) => l.map(daManutencao)));
+      }
     }
     Promise.all(pedidos)
       .then((listas) => {
         if (idRequisicao !== requisicao.current) return;
-        setLinhas(listas.flat().sort((a, b) => b.criadoEm.localeCompare(a.criadoEm)));
+        setLinhas(listas.flat().sort((a, b) => naTriagem
+          ? (a.destaque?.ordem ?? Infinity) - (b.destaque?.ordem ?? Infinity)
+            || a.criadoEm.localeCompare(b.criadoEm) || a.numero.localeCompare(b.numero)
+          : b.criadoEm.localeCompare(a.criadoEm)));
         setPagina(1);
       })
       .catch((e) => {
@@ -234,7 +248,7 @@ export function Solicitacoes() {
       .finally(() => {
         if (idRequisicao === requisicao.current) setCarregando(false);
       });
-  }, [busca, filtroTipo, filtroStatus, semInteracao, veSolicitacoes, veManutencoes]);
+  }, [busca, filtroTipo, filtroStatus, semInteracao, veSolicitacoes, veManutencoes, naTriagem]);
 
   useEffect(() => {
     carregar();
@@ -288,13 +302,14 @@ export function Solicitacoes() {
     setFiltroTipo(tipo);
     const statusValido =
       tipo === TIPO_MANUTENCAO ? filtroStatus in ROTULO_STATUS_MANUTENCAO : STATUS_POR_TIPO[tipo]?.includes(filtroStatus);
-    if (tipo && filtroStatus && !statusValido) {
+    if (tipo === FILA_TRIAGEM || (tipo && filtroStatus && !statusValido)) {
       setFiltroStatus('');
     }
   }
 
   const opcoesTipo: Array<[string, string]> = [
     ['', 'Todas'],
+    ...(podeTriar ? ([[FILA_TRIAGEM, 'Fila de triagem']] as Array<[string, string]>) : []),
     ...(veSolicitacoes ? TIPOS_DE_SOLICITACAO : []),
     ...(veManutencoes ? ([[TIPO_MANUTENCAO, ROTULO_TIPO_SOLICITACAO[TIPO_MANUTENCAO]]] as Array<[string, string]>) : []),
   ];
@@ -305,7 +320,9 @@ export function Solicitacoes() {
     ...OPCOES_STATUS_EXTRA.map(({ valor, texto }): [string, string] => [valor, texto]),
   ];
   const opcoesDeStatus: Array<[string, string]> =
-    filtroTipo === TIPO_MANUTENCAO
+    naTriagem
+      ? Object.entries(ROTULO_STATUS_MANUTENCAO).filter(([status]) => status === 'PENDENTE_APROVACAO' || status === 'AVALIADO')
+      : filtroTipo === TIPO_MANUTENCAO
       ? Object.entries(ROTULO_STATUS_MANUTENCAO)
       : filtroTipo
         ? statusDeSolicitacao.filter(([valor]) => STATUS_POR_TIPO[filtroTipo]?.includes(valor))
@@ -474,6 +491,7 @@ export function Solicitacoes() {
                     </td>
                     <td className="cartao-tipo">
                       <span className="inventario-data">{l.tipoTexto}</span>
+                      {naTriagem && l.destaque?.nome && <span className="badge badge-gray solicitacoes-selo">{l.destaque.nome}</span>}
                       {l.emenda && <span className="badge badge-purple solicitacoes-selo">Emenda</span>}
                       {l.automatica && <span className="badge badge-gray solicitacoes-selo">Automática</span>}
                     </td>

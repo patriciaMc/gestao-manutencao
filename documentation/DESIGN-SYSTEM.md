@@ -11,6 +11,8 @@ Este documento registra a direção visual e as decisões de UX da plataforma. A
 5. **Sem símbolos decorativos:** botões e rótulos usam texto (nada de ícones em botões, setas ou "✕" em textos). Ícones ficam na navegação e em controles sem texto (ex.: fechar, expandir, **X de remover linha**). A única exceção é o "+" no início do texto das ações que **adicionam uma linha a uma lista** ("+ Adicionar item", "+ Adicionar pergunta", "+ Adicionar problema").
 6. **Acessibilidade por padrão:** foco visível, controles semânticos, nomes acessíveis e estados assíncronos anunciados (`role="alert"` / `role="status"`).
 
+Em Solicitações, a visualização **Fila de triagem** agrupa chamados civis e de equipamentos aguardando decisão da triagem, incluindo os devolvidos pela avaliação técnica. Os destaques operacionais ordenam a fila sem mudar a prioridade registrada no chamado.
+
 ## Fundamentos
 
 Tokens globais em `frontend/src/styles.css`; padrões das telas autenticadas em `frontend/src/components/Gestao.css` (estrutura) e `frontend/src/components/Polaris.css` (refinamentos e novos padrões — é o arquivo a estender). Estilos específicos de uma área ficam ao lado da página (`pages/*.css`).

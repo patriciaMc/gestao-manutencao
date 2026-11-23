@@ -19,6 +19,29 @@ const me = {
 };
 
 describe('Solicitações (UC10/UC13/UC16)', () => {
+  it('ordena a fila de triagem das duas modalidades e usa o número próprio', async () => {
+    localStorage.setItem('sgp_token', 'token-teste');
+    const base = { unidade: { id: 'u1', nome: 'UBS Centro' }, tipo: 'CIVIL', status: 'PENDENTE_APROVACAO' };
+    const reparo = { ...base, id: 'm1', numero: 1, titulo: 'Reparo elétrico', criadoEm: '2026-05-01', categoriaCivil: { nome: 'Elétrica' } };
+    const vazamento = { ...base, id: 'm2', numero: 2, titulo: 'Reparo no corredor', criadoEm: '2026-05-02', descricaoProblema: 'Vazamento contínuo' };
+    const ar = { ...base, id: 'm3', numero: 3, titulo: 'Reparo do aparelho', tipo: 'EQUIPAMENTO', status: 'AVALIADO', criadoEm: '2026-05-03', equipamento: { descricao: 'Ar-condicionado' } };
+    const chamadas = mockFetch({
+      '/auth/me': { body: { ...me['/auth/me'].body, perfil: 'OPERADOR', permissoes: ['MANUTENCAO_CONSULTAR', 'MANUTENCAO_TRIAR'] } },
+      '/solicitacoes': { body: [] },
+      '/manutencoes?status=PENDENTE_APROVACAO': { body: [reparo, vazamento] },
+      '/manutencoes?status=AVALIADO': { body: [ar] },
+      '/manutencoes': { body: [reparo, vazamento, ar] },
+    });
+    render(<App />);
+    await userEvent.click(await within(await screen.findByRole('navigation')).findByRole('link', { name: /solicitações/i }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Todas' }));
+    await userEvent.click(screen.getByRole('menuitemradio', { name: 'Fila de triagem' }));
+    await screen.findByText('Vazamento contínuo');
+    const tabela = screen.getByRole('table', { name: 'Solicitações da seleção atual' });
+    expect(within(tabela).getAllByText(/^MAN-/).map((el) => el.textContent)).toEqual(['MAN-0002', 'MAN-0001', 'MAN-0003']);
+    expect(chamadas.some(({ url }) => url.endsWith('/manutencoes?status=AVALIADO'))).toBe(true);
+  });
+
   it('unidade cria solicitação de ampliação pelo catálogo de tipos', async () => {
     localStorage.setItem('sgp_token', 'token-teste');
     const chamadas = mockFetch({
