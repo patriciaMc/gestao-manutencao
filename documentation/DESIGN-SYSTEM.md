@@ -13,6 +13,8 @@ Este documento registra a direção visual e as decisões de UX da plataforma. A
 
 Sob **Solicitações** no menu, as subopções **Triagem Civil** e **Triagem Equipamentos** filtram os chamados da respectiva modalidade que aguardam decisão ou retornaram da avaliação técnica. Na abertura e no detalhe, o histórico de chamados da mesma unidade e categoria fica à esquerda do conteúdo no desktop e acima dele em telas estreitas. Os destaques operacionais ordenam a fila sem mudar a prioridade registrada no chamado.
 
+O **Painel de chamados** acompanha a unidade, a categoria, o tipo de serviço, o status e os termos pesquisados. Os indicadores filtram a tabela e mostram os totais antes desse último filtro. O cartão **Nova demanda** abre o formulário da modalidade correspondente às permissões do usuário. O sino do cabeçalho mostra mensagens não lidas e leva à conversa do chamado.
+
 Na triagem Civil, **Pedir avaliação técnica** e **Encaminhar ao prestador** ficam no cabeçalho do chamado. Para encaminhar, selecione o item do contrato e a prioridade. Baixa é programada, Média tem 48 horas e Crítica tem 2 horas. O prazo começa quando a execução é liberada ao prestador.
 
 **Avaliação Técnica** abre a fila de chamados enviados pela triagem. Os submenus **Agenda de visitas** e **Anotações e pareceres** mantêm o número MAN e levam ao detalhe original do chamado. A agenda filtra data e situação e registra o responsável pela visita. As anotações são pessoais até que o autor as compartilhe com a equipe técnica. Anotações arquivadas ficam na aba do autor e recuperam a visibilidade anterior ao serem desarquivadas. **Preventivas e layout** agrupa dois cronogramas independentes, com cadastro em página própria.

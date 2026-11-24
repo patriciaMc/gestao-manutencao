@@ -19,6 +19,7 @@ import {
   IconeAtas,
   IconeConfiguracoes,
   IconeConversas,
+  IconeSino,
   IconeContratos,
   IconeEstoque,
   IconeFechar,
@@ -117,6 +118,7 @@ export function Layout() {
   const donoMenuUsuario = useRef<HTMLDivElement>(null);
   const botaoMenuUsuario = useRef<HTMLButtonElement>(null);
   const location = useLocation();
+  const [sinoAberto, setSinoAberto] = useState(false);
   const [menuAberto, setMenuAberto] = useState(false);
   const [sidebarAberta, setSidebarAberta] = useState(false);
   const [saindo, setSaindo] = useState(false);
@@ -127,8 +129,10 @@ export function Layout() {
   const secoesConfiguracoes = SECOES_CONFIGURACOES.filter((item) => pode(usuario, ...item.permissoes));
   const emConfiguracoes = location.pathname.startsWith('/configuracoes');
   const emConversas = location.pathname.startsWith('/conversas');
-  const { conversas } = useConversas(emConversas);
-  const naoLidas = useNaoLidas();
+  const { conversas, erro: erroConversas } = useConversas(emConversas || sinoAberto);
+  const naoLidas = useNaoLidas(usuario.perfil !== 'SEM_ACESSO');
+  const conversasNaoLidas = conversas?.filter((conversa) => conversa.naoLidas > 0);
+  const rotuloSino = naoLidas > 0 ? `Notificações do chat (${naoLidas} não lidas)` : 'Notificações do chat';
 
   const tituloGestao =
     location.pathname === '/'
@@ -333,6 +337,41 @@ export function Layout() {
             <strong>Gestão Patrimonial</strong>
           </Link>
           <div className="topbar-actions">
+            {usuario.perfil !== 'SEM_ACESSO' && (
+              <details className="topbar-notificacoes" onToggle={(e) => setSinoAberto(e.currentTarget.open)}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Escape') return;
+                  e.currentTarget.open = false;
+                  e.currentTarget.querySelector('summary')?.focus();
+                }}>
+                <summary aria-label={rotuloSino} title={rotuloSino}>
+                  <IconeSino />
+                  {naoLidas > 0 && <ContagemNaoLidas total={naoLidas} />}
+                </summary>
+                <div className="topbar-notificacoes-painel">
+                  <strong>Mensagens não lidas</strong>
+                  {erroConversas ? <p role="status">Não foi possível carregar as mensagens.</p>
+                    : !conversasNaoLidas ? <p role="status">Carregando mensagens…</p>
+                    : conversasNaoLidas.length === 0 ? <p role="status">Nenhuma mensagem não lida.</p>
+                    : <ul>{conversasNaoLidas.map((c) => (
+                      <li key={`${c.contexto}-${c.id}`}>
+                        <Link to={caminhoConversa(c.contexto, c.id)} onClick={(e) => {
+                          const menu = e.currentTarget.closest('details');
+                          if (menu) menu.open = false;
+                        }}>
+                          <span>{codigoConversa(c)} · {tituloConversa(c)}</span>
+                          <ContagemNaoLidas total={c.naoLidas} />
+                          <small>{c.ultimoAutor} · {c.ultimoTexto}</small>
+                        </Link>
+                      </li>
+                    ))}</ul>}
+                  <Link to="/conversas" onClick={(e) => {
+                    const menu = e.currentTarget.closest('details');
+                    if (menu) menu.open = false;
+                  }}>Ver todas as conversas</Link>
+                </div>
+              </details>
+            )}
             <div className="topbar-user" ref={donoMenuUsuario}>
               <button
                 type="button"

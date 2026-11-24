@@ -42,11 +42,18 @@ describe('Solicitações (UC10/UC13/UC16)', () => {
     await screen.findByText('Vazamento contínuo');
     const tabela = screen.getByRole('table', { name: 'Solicitações da seleção atual' });
     expect(within(tabela).getAllByText(/^MAN-/).map((el) => el.textContent)).toEqual(['MAN-0002', 'MAN-0001']);
+    await userEvent.type(screen.getByRole('textbox', { name: 'Buscar chamados' }), 'eletrica centro');
+    expect(within(tabela).getByText('MAN-0001')).toBeInTheDocument();
+    expect(within(tabela).queryByText('MAN-0002')).not.toBeInTheDocument();
+    await userEvent.clear(screen.getByRole('textbox', { name: 'Buscar chamados' }));
+    await userEvent.selectOptions(screen.getByLabelText('Categoria'), 'Elétrica');
+    expect(within(tabela).queryByText('MAN-0002')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Total na seleção 1' })).toBeInTheDocument();
     await userEvent.selectOptions(await screen.findByLabelText('Unidade'), 'u1');
     await userEvent.selectOptions(screen.getByLabelText('Status'), 'CONCLUIDA');
     await userEvent.type(screen.getByRole('textbox', { name: 'Buscar chamados' }), 'MAN-0001');
     await waitFor(() => expect(chamadas.some(({ url }) =>
-      url.endsWith('/manutencoes?busca=MAN-0001&unidadeId=u1&tipo=CIVIL&status=CONCLUIDA'),
+      url.endsWith('/manutencoes?unidadeId=u1&tipo=CIVIL&status=CONCLUIDA'),
     )).toBe(true));
     await userEvent.click(screen.getByRole('button', { name: 'Limpar filtros' }));
     expect(screen.getByLabelText('Unidade')).toHaveValue('');
@@ -488,4 +495,28 @@ it('sem nenhuma ação disponível para o perfil, o menu Ações nem aparece', a
   await userEvent.click(await screen.findByRole('link', { name: 'Ver solicitação de Autoclave de teste' }));
   expect(await screen.findByLabelText('Número SOL-0012')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Ações' })).not.toBeInTheDocument();
+});
+
+it('abre pelo sino a conversa com nova mensagem do chamado', async () => {
+  localStorage.setItem('sgp_token', 'token-teste');
+  mockFetch({
+    ...me,
+    '/conversas/nao-lidas': { body: { total: 1 } },
+    '/conversas': { body: [{
+      contexto: 'manutencao', id: 'm1', numero: 1, titulo: 'Vazamento',
+      naoLidas: 1, ultimoAutor: 'Técnica', ultimoTexto: 'Visita confirmada.',
+      ultimaEm: '2026-05-01T09:00:00Z',
+    }] },
+    '/manutencoes/m1/mensagens': { body: [{
+      id: 'msg-1', texto: 'Visita confirmada.', criadoEm: '2026-05-01T09:00:00Z',
+      autor: { id: 'tecnica', nome: 'Técnica', perfil: 'OPERADOR' },
+    }] },
+  });
+  render(<App />);
+  await userEvent.click(await screen.findByLabelText('Notificações do chat (1 não lidas)'));
+  const alerta = await within(screen.getByText('Mensagens não lidas', { selector: 'strong' }).parentElement!)
+    .findByRole('link', { name: /MAN-0001.*Vazamento/ });
+  expect(alerta).toHaveAttribute('href', '/conversas/manutencao/m1');
+  await userEvent.click(alerta);
+  expect(await screen.findByText('Visita confirmada.', { exact: true })).toBeVisible();
 });

@@ -9,6 +9,7 @@ import {
   IconeCheck,
   IconeChevron,
   IconeFiltros,
+  IconeCarta,
 } from '../components/icons';
 import './Solicitacoes.css';
 import { statusExibido, tituloSolicitacao } from '../utils/solicitacao';
@@ -122,6 +123,11 @@ interface LinhaLista {
   tipo: string;
   tipoTexto: string;
   unidade: string;
+  unidadeId: string;
+  categoria: string;
+  servico: string;
+  termosExtras: Array<string | null | undefined>;
+  prazoCivil?: string | null;
   statusValor: string;
   statusTexto: string;
   criadoEm: string;
@@ -140,6 +146,10 @@ const daSolicitacao = (s: Solicitacao): LinhaLista => ({
   tipo: s.tipo,
   tipoTexto: ROTULO_TIPO_SOLICITACAO[s.tipo],
   unidade: s.unidadeOrigem.nome,
+  unidadeId: s.unidadeOrigem.id,
+  categoria: 'Patrimônio',
+  servico: ROTULO_TIPO_SOLICITACAO[s.tipo],
+  termosExtras: [s.justificativa, s.equipamento?.tombamento, s.equipamento?.descricao, s.tipoEquipamento?.nome],
   statusValor: statusExibido(s).valor,
   statusTexto: statusExibido(s).texto,
   criadoEm: s.criadoEm,
@@ -157,6 +167,13 @@ const daManutencao = (m: Manutencao): LinhaLista => ({
   tipo: TIPO_MANUTENCAO,
   tipoTexto: m.tipo === 'CIVIL' ? 'Manutenção civil' : ROTULO_TIPO_SOLICITACAO[TIPO_MANUTENCAO],
   unidade: m.unidade.nome,
+  unidadeId: m.unidade.id,
+  categoria: m.categoriaCivil?.nome ?? m.equipamento?.tipoEquipamento?.categoria?.nome
+    ?? (m.tipo === 'CIVIL' ? 'Civil' : 'Equipamentos'),
+  servico: m.contratoItem?.servico.nome ?? (m.tipo === 'CIVIL' ? 'Manutenção civil' : 'Manutenção de equipamentos'),
+  termosExtras: [m.descricaoProblema, m.localAfetado, m.equipamento?.tombamento,
+    m.equipamento?.descricao, m.equipamento?.tipoEquipamento?.nome],
+  prazoCivil: m.slaCivilVenceEm,
   statusValor: statusManutencaoExibido(m).valor,
   statusTexto: statusManutencaoExibido(m).texto,
   criadoEm: m.criadoEm,
@@ -166,6 +183,20 @@ const daManutencao = (m: Manutencao): LinhaLista => ({
   automatica: false,
   destaque: destaqueTriagem(m),
 });
+
+const normalizarBusca = (texto: string) =>
+  texto.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('pt-BR');
+
+const encerrados = new Set(['BAIXADO', 'CANCELADA', 'CONCLUIDA', 'ENCERRADA', 'EXPIRADA', 'NEGADA']);
+const emAvaliacao = new Set(['AGUARDANDO_AVALIACAO_TECNICA', 'AGUARDANDO_VISTORIA']);
+const situacoes = [
+  { id: '', nome: 'Total na seleção', inclui: () => true },
+  { id: 'abertos', nome: 'Em aberto', inclui: (l: LinhaLista) => !encerrados.has(l.statusValor) },
+  { id: 'avaliacao', nome: 'Em avaliação', inclui: (l: LinhaLista) => emAvaliacao.has(l.statusValor) },
+  { id: 'vencidos', nome: 'SLA civil vencido', inclui: (l: LinhaLista) =>
+    !encerrados.has(l.statusValor) && Boolean(l.prazoCivil && Date.parse(l.prazoCivil) <= Date.now()) },
+  { id: 'encerrados', nome: 'Encerrados', inclui: (l: LinhaLista) => encerrados.has(l.statusValor) },
+];
 
 export function Solicitacoes() {
   const { usuario } = useAuth();
@@ -188,6 +219,9 @@ export function Solicitacoes() {
     OPCOES_STATUS_EXTRA.some((o) => o.valor === statusDaUrl);
   const tipoTriagem = podeTriar && filaValida(filtroTipo) ? FILAS_TRIAGEM[filtroTipo] : '';
   const naTriagem = Boolean(tipoTriagem);
+  const [filtroCategoria, setFiltroCategoria] = useState('');
+  const [filtroServico, setFiltroServico] = useState('');
+  const [filtroSituacao, setFiltroSituacao] = useState('');
   const [filtroUnidade, setFiltroUnidade] = useState('');
   const { dados: unidades, carregando: carregandoUnidades, falha: falhaUnidades } = useCarga(
     () => api.get<Unidade[]>('/unidades'), naTriagem, 'Não foi possível carregar as unidades.',
@@ -225,7 +259,6 @@ export function Solicitacoes() {
       veManutencoes && (!filtroTipo || filtroTipo === TIPO_MANUTENCAO || naTriagem) && (!filtroStatus || statusTodos || filtroStatus in ROTULO_STATUS_MANUTENCAO);
     const consulta = (statusBackend: string, tipo = '') => {
       const p = new URLSearchParams();
-      if (busca.trim()) p.set('busca', busca.trim());
       if (naTriagem && filtroUnidade) p.set('unidadeId', filtroUnidade);
       if (tipo) p.set('tipo', tipo);
       if (statusBackend) p.set('status', statusBackend);
@@ -261,7 +294,7 @@ export function Solicitacoes() {
       .finally(() => {
         if (idRequisicao === requisicao.current) setCarregando(false);
       });
-  }, [busca, filtroTipo, filtroStatus, semInteracao, veSolicitacoes, veManutencoes, naTriagem, tipoTriagem, filtroUnidade]);
+  }, [filtroTipo, filtroStatus, semInteracao, veSolicitacoes, veManutencoes, naTriagem, tipoTriagem, filtroUnidade]);
 
   useEffect(() => {
     carregar();
@@ -279,6 +312,9 @@ export function Solicitacoes() {
       statusDaUrl in ROTULO_STATUS_MANUTENCAO ||
       OPCOES_STATUS_EXTRA.some((o) => o.valor === statusDaUrl);
     setFiltroStatus(statusOk ? statusDaUrl : '');
+    setFiltroCategoria('');
+    setFiltroServico('');
+    setFiltroSituacao('');
   }, [tipoDaUrl, statusDaUrl, podeTriar]);
 
   // Fecha os menus da barra ao clicar fora ou apertar Escape
@@ -301,12 +337,42 @@ export function Solicitacoes() {
   }, []);
 
 
-  // O backend filtra pelo status real (ex: AGUARDANDO_ENTREGA), mas quando o
-  // filtro escolhido é um pseudo-status (ex: "Aguardando Recolha (Branet)")
-  // ainda falta refinar no cliente pra bater exatamente com o badge exibido
-  const solicitacoesExibidas = OPCOES_STATUS_EXTRA.some((o) => o.valor === filtroStatus)
-    ? linhas.filter((l) => l.statusValor === filtroStatus)
-    : linhas;
+  useEffect(() => {
+    setPagina(1);
+  }, [busca, filtroUnidade, filtroCategoria, filtroServico, filtroSituacao]);
+
+  const termos = normalizarBusca(busca.trim()).split(/\s+/).filter(Boolean);
+  const statusExtra = OPCOES_STATUS_EXTRA.some((o) => o.valor === filtroStatus);
+  const linhasDaUnidade = linhas.filter((l) =>
+    (!filtroUnidade || l.unidadeId === filtroUnidade) && (!statusExtra || l.statusValor === filtroStatus));
+  const opcoes = (valores: string[], atual: string) =>
+    [...new Set([...valores, atual].filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const unidadesDisponiveis = naTriagem ? unidades : [...new Map(
+    linhas.filter((l) => l.unidadeId).map((l) => [l.unidadeId, { id: l.unidadeId, nome: l.unidade }]),
+  ).values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  const categorias = opcoes(linhasDaUnidade.filter((l) => !filtroServico || l.servico === filtroServico)
+    .map((l) => l.categoria), filtroCategoria);
+  const servicos = opcoes(linhasDaUnidade.filter((l) => !filtroCategoria || l.categoria === filtroCategoria)
+    .map((l) => l.servico), filtroServico);
+  const selecao = linhasDaUnidade.filter((l) => {
+    if ((filtroCategoria && l.categoria !== filtroCategoria) || (filtroServico && l.servico !== filtroServico)) return false;
+    if (!termos.length) return true;
+    const indice = normalizarBusca([l.numero, l.numero.replace('-', ''), l.numero.replace(/-0*/, '-'), l.titulo, l.unidade,
+      l.categoria, l.servico, l.statusTexto, l.tipoTexto, ...l.termosExtras].filter(Boolean).join(' '));
+    return termos.every((termo) => indice.includes(termo));
+  });
+  const incluiSituacao = situacoes.find(({ id }) => id === filtroSituacao)?.inclui;
+  const solicitacoesExibidas = incluiSituacao ? selecao.filter(incluiSituacao) : selecao;
+
+  function limparFiltros() {
+    setBusca('');
+    setFiltroUnidade('');
+    setFiltroStatus('');
+    setFiltroCategoria('');
+    setFiltroServico('');
+    setFiltroSituacao('');
+    setSemInteracao(false);
+  }
 
   const porPagina = 10;
   const totalPaginas = Math.max(1, Math.ceil(solicitacoesExibidas.length / porPagina));
@@ -314,6 +380,9 @@ export function Solicitacoes() {
   const inicio = (paginaAtual - 1) * porPagina;
   function selecionarTipo(tipo: string) {
     setFiltroTipo(tipo);
+    setFiltroCategoria('');
+    setFiltroServico('');
+    setFiltroSituacao('');
     const statusValido =
       tipo === TIPO_MANUTENCAO ? filtroStatus in ROTULO_STATUS_MANUTENCAO : STATUS_POR_TIPO[tipo]?.includes(filtroStatus);
     const limparStatus = filaValida(tipo) || (tipo && filtroStatus && !statusValido);
@@ -349,7 +418,9 @@ export function Solicitacoes() {
         ? statusDeSolicitacao.filter(([valor]) => STATUS_POR_TIPO[filtroTipo]?.includes(valor))
         : [...(veSolicitacoes ? statusDeSolicitacao : []), ...(veManutencoes ? STATUS_SO_DE_MANUTENCAO : [])];
   const totalFiltros = Number(Boolean(filtroStatus)) + Number(semInteracao);
-  const podeCriar = usuario?.perfil === 'UNIDADE' || pode(usuario, 'SOLICITACOES_GERENCIAR', 'MANUTENCAO_ESCREVER');
+  const podeCriarManutencao = usuario?.perfil === 'UNIDADE' || pode(usuario, 'MANUTENCAO_ESCREVER');
+  const podeCriarPatrimonio = usuario?.perfil === 'UNIDADE' || pode(usuario, 'SOLICITACOES_GERENCIAR');
+  const podeCriar = naTriagem ? podeCriarManutencao : podeCriarManutencao || podeCriarPatrimonio;
 
   return (
     <section
@@ -360,7 +431,7 @@ export function Solicitacoes() {
         <div>
           <h2 id="solicitacoes-titulo">Solicitações</h2>
         </div>
-        {podeCriar && (
+        {(naTriagem ? podeCriarManutencao : podeCriarPatrimonio) && (
           <div className="inventario-lista-acoes">
             <Link to={naTriagem ? `/solicitacoes/nova?tipo=MANUTENCAO&natureza=${tipoTriagem}` : "/solicitacoes/nova"} className="btn btn-primary">
               {naTriagem ? (tipoTriagem === 'CIVIL' ? 'Nova triagem Civil' : 'Nova triagem Equipamentos') : 'Nova solicitação'}
@@ -369,6 +440,33 @@ export function Solicitacoes() {
         )}
       </div>
 
+
+      <section className="chamados-painel" aria-labelledby="chamados-painel-titulo" aria-busy={carregando}>
+        <div className="chamados-painel-resumo">
+          <h3 id="chamados-painel-titulo">Painel de chamados</h3>
+          <div className="chamados-indicadores">
+            {situacoes.map(({ id, nome, inclui }) => (
+              <button key={id} type="button" aria-pressed={filtroSituacao === id}
+                disabled={carregando || falhaCarregamento} onClick={() => setFiltroSituacao(id)}>
+                <span>{nome}</span>
+                <strong>{carregando || falhaCarregamento ? '—' : selecao.filter(inclui).length}</strong>
+              </button>
+            ))}
+          </div>
+        </div>
+        {podeCriar && (
+          <div className="chamados-nova-demanda">
+            <h3><IconeCarta /> Nova demanda</h3>
+            <div>
+              {podeCriarManutencao && (!naTriagem || tipoTriagem === 'CIVIL') &&
+                <Link to="/solicitacoes/nova?tipo=MANUTENCAO&natureza=CIVIL">Manutenção civil</Link>}
+              {podeCriarManutencao && (!naTriagem || tipoTriagem === 'EQUIPAMENTO') &&
+                <Link to="/solicitacoes/nova?tipo=MANUTENCAO&natureza=EQUIPAMENTO">Manutenção de equipamentos</Link>}
+              {!naTriagem && podeCriarPatrimonio && <Link to="/solicitacoes/nova">Demanda patrimonial</Link>}
+            </div>
+          </div>
+        )}
+      </section>
 
       <div className="gestao-lista inventario-lista">
         <div className="inventario-controles" ref={controles}>
@@ -424,7 +522,7 @@ export function Solicitacoes() {
                 <IconeBusca />
                 <input
                   aria-label={naTriagem ? "Buscar chamados" : "Buscar solicitações"}
-                  placeholder={naTriagem ? "Número MAN, título, categoria ou descrição" : "Buscar e filtrar"}
+                  placeholder="Número, título, unidade, categoria ou serviço"
                   value={busca}
                   onChange={(e) => setBusca(e.target.value)}
                 />
@@ -447,29 +545,45 @@ export function Solicitacoes() {
               </button>
             </div>
           </div>
-          {naTriagem && (
-            <div className="triagem-filtros">
+          <div className="triagem-filtros chamados-filtros">
               <div className="field">
                 <label htmlFor="triagem-filtro-unidade">Unidade</label>
-                <select id="triagem-filtro-unidade" value={filtroUnidade} disabled={carregandoUnidades || Boolean(falhaUnidades)}
-                  onChange={(evento) => setFiltroUnidade(evento.target.value)}>
+                <select id="triagem-filtro-unidade" value={filtroUnidade} disabled={naTriagem && (carregandoUnidades || Boolean(falhaUnidades))}
+                  onChange={(evento) => {
+                    setFiltroUnidade(evento.target.value);
+                    setFiltroCategoria('');
+                    setFiltroServico('');
+                  }}>
                   <option value="">{carregandoUnidades ? 'Carregando unidades…' : 'Todas as unidades'}</option>
-                  {unidades?.map((unidade) => <option key={unidade.id} value={unidade.id}>{unidade.nome}</option>)}
+                  {filtroUnidade && !unidadesDisponiveis?.some((u) => u.id === filtroUnidade) &&
+                    <option value={filtroUnidade}>Unidade selecionada</option>}
+                  {unidadesDisponiveis?.map((unidade) => <option key={unidade.id} value={unidade.id}>{unidade.nome}</option>)}
                 </select>
                 {falhaUnidades && <small role="status">Não foi possível carregar as unidades.</small>}
               </div>
-              <div className="field">
+              {naTriagem && <div className="field">
                 <label htmlFor="triagem-filtro-status">Status</label>
                 <select id="triagem-filtro-status" value={filtroStatus} onChange={(evento) => setFiltroStatus(evento.target.value)}>
                   <option value="">Pendentes e avaliados</option>
                   {opcoesDeStatus.map(([valor, rotulo]) => <option key={valor} value={valor}>{rotulo}</option>)}
                 </select>
+              </div>}
+              <div className="field">
+                <label htmlFor="chamados-categoria">Categoria</label>
+                <select id="chamados-categoria" value={filtroCategoria} onChange={(e) => setFiltroCategoria(e.target.value)}>
+                  <option value="">Todas as categorias</option>
+                  {categorias.map((nome) => <option key={nome}>{nome}</option>)}
+                </select>
               </div>
-              <button type="button" className="btn btn-outline" onClick={() => {
-                setBusca(''); setFiltroUnidade(''); setFiltroStatus(''); setSemInteracao(false);
-              }}>Limpar filtros</button>
+              <div className="field">
+                <label htmlFor="chamados-servico">Tipo de serviço</label>
+                <select id="chamados-servico" value={filtroServico} onChange={(e) => setFiltroServico(e.target.value)}>
+                  <option value="">Todos os serviços</option>
+                  {servicos.map((nome) => <option key={nome}>{nome}</option>)}
+                </select>
+              </div>
+              <button type="button" className="btn btn-outline" onClick={limparFiltros}>Limpar filtros</button>
             </div>
-          )}
           {filtrosAbertos && (
             <div className="inventario-filtros-popover">
               {!naTriagem && <label className="gestao-filtro-select">
@@ -535,6 +649,7 @@ export function Solicitacoes() {
                     </td>
                     <td className="cartao-tipo">
                       <span className="inventario-data">{l.tipoTexto}</span>
+                      <small className="chamados-tipo-detalhe">{l.categoria}{l.servico !== l.tipoTexto && ` · ${l.servico}`}</small>
                       {naTriagem && l.destaque?.nome && <span className="badge badge-gray solicitacoes-selo">{l.destaque.nome}</span>}
                       {l.emenda && <span className="badge badge-purple solicitacoes-selo">Emenda</span>}
                       {l.automatica && <span className="badge badge-gray solicitacoes-selo">Automática</span>}
