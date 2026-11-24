@@ -11,6 +11,7 @@ import { useAuth } from '../auth/AuthContext';
 import { StatusPill } from '../components/StatusPill';
 import { CampoAnexo } from '../components/CampoAnexo';
 import { caminhoConversa } from '../utils/conversas';
+import { HistoricoTriagem } from '../components/HistoricoTriagem';
 import { HistoricoRecolhivel } from '../components/HistoricoRecolhivel';
 import type { Contrato, EventoManutencao, Manutencao, StatusManutencao } from '../types';
 import {
@@ -604,6 +605,7 @@ function ConteudoManutencao({
           </div>
         </div>
 
+      <div className={podeTriar ? "manutencao-com-historico" : undefined}>
       <div className="solicitacao-layout">
         <section className="equipamento-secao solicitacao-informacoes">
           <h3>Informações da manutenção</h3>
@@ -820,6 +822,8 @@ function ConteudoManutencao({
             </ol>
           )}
         </HistoricoRecolhivel>
+      </div>
+        {podeTriar && <HistoricoTriagem key={m.id} manutencao={m} />}
       </div>
     </section>
   );

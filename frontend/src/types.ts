@@ -292,7 +292,7 @@ export interface Manutencao {
     id: string;
     tombamento: string;
     descricao: string;
-    tipoEquipamento?: { nome: string; permitePreventiva?: boolean; permiteCorretiva?: boolean; preco?: string | null };
+    tipoEquipamento?: { nome: string; categoria?: { nome: string }; permitePreventiva?: boolean; permiteCorretiva?: boolean; preco?: string | null };
   } | null;
   unidade: { id: string; nome: string };
   solicitante: { nome: string };

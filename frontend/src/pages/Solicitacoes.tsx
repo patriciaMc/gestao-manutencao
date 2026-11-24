@@ -107,7 +107,10 @@ const STATUS_SO_DE_MANUTENCAO = Object.entries(ROTULO_STATUS_MANUTENCAO).filter(
   ([valor]) => !(valor in ROTULO_STATUS_SOLICITACAO),
 );
 
-const FILA_TRIAGEM = 'FILA_TRIAGEM';
+const FILAS_TRIAGEM = { TRIAGEM_CIVIL: 'CIVIL', TRIAGEM_EQUIPAMENTOS: 'EQUIPAMENTO' } as const;
+function filaValida(tipo: string): tipo is keyof typeof FILAS_TRIAGEM {
+  return Object.hasOwn(FILAS_TRIAGEM, tipo);
+}
 
 interface LinhaLista {
   chave: string;
@@ -174,13 +177,14 @@ export function Solicitacoes() {
   const tipoDaUrl = params.get('tipo') ?? '';
   const statusDaUrl = params.get('status') ?? '';
   const [filtroTipo, setFiltroTipo] = useState(
-    tipoDaUrl === TIPO_MANUTENCAO || tipoDaUrl in ROTULO_TIPO_SOLICITACAO ? tipoDaUrl : '',
+    tipoDaUrl === TIPO_MANUTENCAO || tipoDaUrl in ROTULO_TIPO_SOLICITACAO || (podeTriar && filaValida(tipoDaUrl)) ? tipoDaUrl : '',
   );
   const statusInicialValido =
     statusDaUrl in ROTULO_STATUS_SOLICITACAO ||
     statusDaUrl in ROTULO_STATUS_MANUTENCAO ||
     OPCOES_STATUS_EXTRA.some((o) => o.valor === statusDaUrl);
-  const naTriagem = podeTriar && filtroTipo === FILA_TRIAGEM;
+  const tipoTriagem = podeTriar && filaValida(filtroTipo) ? FILAS_TRIAGEM[filtroTipo] : '';
+  const naTriagem = Boolean(tipoTriagem);
   const [filtroStatus, setFiltroStatus] = useState(statusInicialValido ? statusDaUrl : '');
   // Só chamados de manutenção: os que ninguém tocou ainda (sem mensagem no chat nem mudança de status)
   const [semInteracao, setSemInteracao] = useState(false);
@@ -216,7 +220,7 @@ export function Solicitacoes() {
       if (busca) p.set('busca', busca);
       if (tipo) p.set('tipo', tipo);
       if (statusBackend) p.set('status', statusBackend);
-      if (semInteracao && tipo === '') p.set('semInteracao', 'true');
+      if (semInteracao && (tipo === '' || naTriagem)) p.set('semInteracao', 'true');
       return p;
     };
     const pedidos: Array<Promise<LinhaLista[]>> = [];
@@ -227,7 +231,7 @@ export function Solicitacoes() {
     if (buscarManutencoes) {
       const status = naTriagem && !filtroStatus ? ['PENDENTE_APROVACAO', 'AVALIADO'] : [filtroStatus];
       for (const etapa of status) {
-        pedidos.push(api.get<Manutencao[]>(`/manutencoes?${consulta(etapa)}`).then((l) => l.map(daManutencao)));
+        pedidos.push(api.get<Manutencao[]>(`/manutencoes?${consulta(etapa, tipoTriagem)}`).then((l) => l.map(daManutencao)));
       }
     }
     Promise.all(pedidos)
@@ -248,7 +252,7 @@ export function Solicitacoes() {
       .finally(() => {
         if (idRequisicao === requisicao.current) setCarregando(false);
       });
-  }, [busca, filtroTipo, filtroStatus, semInteracao, veSolicitacoes, veManutencoes, naTriagem]);
+  }, [busca, filtroTipo, filtroStatus, semInteracao, veSolicitacoes, veManutencoes, naTriagem, tipoTriagem]);
 
   useEffect(() => {
     carregar();
@@ -259,13 +263,13 @@ export function Solicitacoes() {
 
   // Deep link da Home (Pendências): aplica tipo/status da URL ao abrir a lista
   useEffect(() => {
-    setFiltroTipo(tipoDaUrl === TIPO_MANUTENCAO || tipoDaUrl in ROTULO_TIPO_SOLICITACAO ? tipoDaUrl : '');
+    setFiltroTipo(tipoDaUrl === TIPO_MANUTENCAO || tipoDaUrl in ROTULO_TIPO_SOLICITACAO || (podeTriar && filaValida(tipoDaUrl)) ? tipoDaUrl : '');
     const statusOk =
       statusDaUrl in ROTULO_STATUS_SOLICITACAO ||
       statusDaUrl in ROTULO_STATUS_MANUTENCAO ||
       OPCOES_STATUS_EXTRA.some((o) => o.valor === statusDaUrl);
     setFiltroStatus(statusOk ? statusDaUrl : '');
-  }, [tipoDaUrl, statusDaUrl]);
+  }, [tipoDaUrl, statusDaUrl, podeTriar]);
 
   // Fecha os menus da barra ao clicar fora ou apertar Escape
   useEffect(() => {
@@ -302,14 +306,14 @@ export function Solicitacoes() {
     setFiltroTipo(tipo);
     const statusValido =
       tipo === TIPO_MANUTENCAO ? filtroStatus in ROTULO_STATUS_MANUTENCAO : STATUS_POR_TIPO[tipo]?.includes(filtroStatus);
-    if (tipo === FILA_TRIAGEM || (tipo && filtroStatus && !statusValido)) {
+    if (filaValida(tipo) || (tipo && filtroStatus && !statusValido)) {
       setFiltroStatus('');
     }
   }
 
   const opcoesTipo: Array<[string, string]> = [
     ['', 'Todas'],
-    ...(podeTriar ? ([[FILA_TRIAGEM, 'Fila de triagem']] as Array<[string, string]>) : []),
+    ...(podeTriar ? ([['TRIAGEM_CIVIL', 'Triagem Civil'], ['TRIAGEM_EQUIPAMENTOS', 'Triagem Equipamentos']] as Array<[string, string]>) : []),
     ...(veSolicitacoes ? TIPOS_DE_SOLICITACAO : []),
     ...(veManutencoes ? ([[TIPO_MANUTENCAO, ROTULO_TIPO_SOLICITACAO[TIPO_MANUTENCAO]]] as Array<[string, string]>) : []),
   ];

@@ -355,6 +355,25 @@ describe('Manutenção civil', () => {
       expect(prismaMock.manutencao.update).not.toHaveBeenCalled();
     });
 
+    it.each([
+      ['CIVIL', { categoriaCivilId: CAT }],
+      ['EQUIPAMENTO', { equipamento: { tipoEquipamento: { categoriaId: CAT } } }],
+    ])('consulta o histórico de %s por unidade e categoria, incluindo encerrados', async (tipo, categoria) => {
+      prismaMock.manutencao.findUnique.mockResolvedValue(civil({
+        tipo, equipamento: { tipoEquipamento: { categoriaId: CAT } },
+      }) as never);
+      prismaMock.manutencao.count.mockResolvedValue(12);
+      prismaMock.manutencao.findMany.mockResolvedValue([{ id: 'anterior', numero: 4, status: 'CONCLUIDA' }] as never);
+      const caminho = `/manutencoes/${MAN}/historico-triagem`;
+      const res = await request(app).get(caminho).set(admin());
+      const where = { id: { not: MAN }, unidadeId: 'unidade-1', tipo, ...categoria };
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ total: 12, mesmaCategoria: true, chamados: [{ numero: 4, status: 'CONCLUIDA' }] });
+      expect(prismaMock.manutencao.findMany).toHaveBeenCalledWith(expect.objectContaining({ where, take: 8 }));
+      expect(prismaMock.manutencao.count).toHaveBeenCalledWith({ where });
+      expect((await request(app).get(caminho).set(unidade())).status).toBe(403);
+    });
+
     it('lista chamados parecidos em aberto da mesma unidade e tipo de problema', async () => {
       prismaMock.manutencao.findUnique.mockResolvedValue(civil() as never);
       prismaMock.manutencao.findMany.mockResolvedValue([] as never);

@@ -11,7 +11,8 @@ export function mockFetch(rotas: Record<string, Resposta | ((init?: RequestInit)
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
       chamadas.push({ url, init });
-      const chave = Object.keys(rotas).find((r) => url.includes(r));
+      const historicoTriagem = url.endsWith('/historico-triagem');
+      const chave = Object.keys(rotas).find((r) => (!historicoTriagem || r.endsWith('/historico-triagem')) && url.includes(r));
       const def = chave ? rotas[chave] : undefined;
       // Home sempre pede pendências e atualizações; testes que não exercitam isso recebem lista vazia
       const padraoHome: Resposta | undefined =
@@ -20,7 +21,8 @@ export function mockFetch(rotas: Record<string, Resposta | ((init?: RequestInit)
           : !def && url.includes('/dashboard/alertas')
             ? { body: [] }
             : undefined;
-      const resposta = typeof def === 'function' ? def(init) : (def ?? padraoHome);
+      const padraoTriagem: Resposta | undefined = historicoTriagem ? { body: { total: 0, chamados: [], mesmaCategoria: false } } : undefined;
+      const resposta = typeof def === 'function' ? def(init) : (def ?? padraoHome ?? padraoTriagem);
       const status = resposta?.status ?? (resposta ? 200 : 404);
       let body = resposta?.body ?? { mensagem: 'Não encontrado' };
       // O operador de teste tem todas as permissões, salvo quando o teste define as dele

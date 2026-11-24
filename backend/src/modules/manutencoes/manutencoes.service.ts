@@ -18,7 +18,7 @@ export const includePadrao = {
   equipamento: {
     include: {
       tipoEquipamento: {
-        select: { nome: true, permitePreventiva: true, permiteCorretiva: true, preco: true },
+        select: { nome: true, categoriaId: true, categoria: { select: { nome: true } }, permitePreventiva: true, permiteCorretiva: true, preco: true },
       },
     },
   },
@@ -750,6 +750,33 @@ export async function similares(usuario: AuthPayload, id: string) {
     orderBy: { criadoEm: 'desc' },
     take: 10,
   });
+}
+
+export async function historicoTriagem(usuario: AuthPayload, id: string) {
+  const chamado = await buscarPorId(usuario, id);
+  const categoriaEquipamento = chamado.equipamento?.tipoEquipamento?.categoriaId;
+  const categoria = chamado.tipo === 'CIVIL'
+    ? chamado.categoriaCivilId
+    : categoriaEquipamento;
+  const onde: Prisma.ManutencaoWhereInput = {
+    id: { not: id },
+    unidadeId: chamado.unidadeId,
+    tipo: chamado.tipo,
+    ...(chamado.tipo === 'CIVIL' && categoria ? { categoriaCivilId: categoria } : {}),
+    ...(chamado.tipo === 'EQUIPAMENTO' && categoria
+      ? { equipamento: { tipoEquipamento: { categoriaId: categoria } } }
+      : {}),
+  };
+  const [total, chamados] = await prisma.$transaction([
+    prisma.manutencao.count({ where: onde }),
+    prisma.manutencao.findMany({
+      where: onde,
+      select: { id: true, numero: true, titulo: true, descricaoProblema: true, status: true, abertoPorContestacao: true, criadoEm: true },
+      orderBy: [{ criadoEm: 'desc' }, { numero: 'desc' }],
+      take: 8,
+    }),
+  ]);
+  return { total, chamados, mesmaCategoria: Boolean(categoria) };
 }
 
 // Devolve o equipamento a ativo se ele ainda estiver em manutenção (condição na gravação, sem corrida) e registra o retorno

@@ -326,6 +326,10 @@ manutencoesRouter.get('/:id/similares', permitirCom('MANUTENCAO_TRIAR'), async (
   res.json(await service.similares(req.usuario!, req.params.id));
 });
 
+manutencoesRouter.get('/:id/historico-triagem', leitura, permitirCom('MANUTENCAO_TRIAR'), async (req, res) => {
+  res.json(await service.historicoTriagem(req.usuario!, req.params.id));
+});
+
 // Triagem: parar o chamado com um motivo e retomá-lo depois, no mesmo ponto
 manutencoesRouter.post(
   '/:id/bloquear',

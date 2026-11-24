@@ -19,7 +19,7 @@ const me = {
 };
 
 describe('Solicitações (UC10/UC13/UC16)', () => {
-  it('ordena a fila de triagem das duas modalidades e usa o número próprio', async () => {
+  it('separa as filas de triagem por modalidade e usa o número próprio', async () => {
     localStorage.setItem('sgp_token', 'token-teste');
     const base = { unidade: { id: 'u1', nome: 'UBS Centro' }, tipo: 'CIVIL', status: 'PENDENTE_APROVACAO' };
     const reparo = { ...base, id: 'm1', numero: 1, titulo: 'Reparo elétrico', criadoEm: '2026-05-01', categoriaCivil: { nome: 'Elétrica' } };
@@ -28,18 +28,24 @@ describe('Solicitações (UC10/UC13/UC16)', () => {
     const chamadas = mockFetch({
       '/auth/me': { body: { ...me['/auth/me'].body, perfil: 'OPERADOR', permissoes: ['MANUTENCAO_CONSULTAR', 'MANUTENCAO_TRIAR'] } },
       '/solicitacoes': { body: [] },
-      '/manutencoes?status=PENDENTE_APROVACAO': { body: [reparo, vazamento] },
-      '/manutencoes?status=AVALIADO': { body: [ar] },
+      '/manutencoes?tipo=CIVIL&status=PENDENTE_APROVACAO': { body: [reparo, vazamento] },
+      '/manutencoes?tipo=CIVIL&status=AVALIADO': { body: [] },
+      '/manutencoes?tipo=EQUIPAMENTO&status=PENDENTE_APROVACAO': { body: [] },
+      '/manutencoes?tipo=EQUIPAMENTO&status=AVALIADO': { body: [ar] },
       '/manutencoes': { body: [reparo, vazamento, ar] },
     });
     render(<App />);
     await userEvent.click(await within(await screen.findByRole('navigation')).findByRole('link', { name: /solicitações/i }));
     await userEvent.click(await screen.findByRole('button', { name: 'Todas' }));
-    await userEvent.click(screen.getByRole('menuitemradio', { name: 'Fila de triagem' }));
+    await userEvent.click(screen.getByRole('menuitemradio', { name: 'Triagem Civil' }));
     await screen.findByText('Vazamento contínuo');
     const tabela = screen.getByRole('table', { name: 'Solicitações da seleção atual' });
-    expect(within(tabela).getAllByText(/^MAN-/).map((el) => el.textContent)).toEqual(['MAN-0002', 'MAN-0001', 'MAN-0003']);
-    expect(chamadas.some(({ url }) => url.endsWith('/manutencoes?status=AVALIADO'))).toBe(true);
+    expect(within(tabela).getAllByText(/^MAN-/).map((el) => el.textContent)).toEqual(['MAN-0002', 'MAN-0001']);
+    await userEvent.click(screen.getByRole('button', { name: 'Triagem Civil' }));
+    await userEvent.click(screen.getByRole('menuitemradio', { name: 'Triagem Equipamentos' }));
+    expect(await within(tabela).findByText('MAN-0003')).toBeInTheDocument();
+    expect(within(tabela).queryByText('MAN-0002')).not.toBeInTheDocument();
+    expect(chamadas.some(({ url }) => url.endsWith('/manutencoes?tipo=EQUIPAMENTO&status=AVALIADO'))).toBe(true);
   });
 
   it('unidade cria solicitação de ampliação pelo catálogo de tipos', async () => {

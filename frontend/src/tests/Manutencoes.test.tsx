@@ -56,6 +56,12 @@ describe('Manutenções', () => {
   it('lista as manutenções e abre o detalhe em página própria com histórico recolhido', async () => {
     mockFetch({
       ...entrarComo('OPERADOR'),
+      '/manutencoes/m1/historico-triagem': {
+        body: { total: 1, mesmaCategoria: true, chamados: [{
+          id: 'anterior', numero: 5, titulo: 'Revisão anterior', descricaoProblema: 'Verificação do aparelho',
+          status: 'CONCLUIDA', criadoEm: '2026-09-20T13:00:00.000Z',
+        }] },
+      },
       '/manutencoes/m1/historico': {
         body: [
           { id: 'abertura', acao: 'ABRIR_MANUTENCAO', criadoEm: '2026-10-01T13:00:00.000Z', usuario: 'Rodrigo' },
@@ -83,6 +89,10 @@ describe('Manutenções', () => {
     expect(screen.getByLabelText('Número MAN-0007')).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByText('Não atinge a temperatura adequada')).toBeInTheDocument();
+
+    const lateral = await screen.findByRole('complementary', { name: 'Histórico de chamados da unidade' });
+    expect(await within(lateral).findByRole('link', { name: 'MAN-0005 · Revisão anterior' })).toHaveAttribute('href', '/manutencoes/anterior');
+    expect(within(lateral).getByText('1 de 1 na mesma categoria')).toBeInTheDocument();
 
     const historico = await screen.findByRole('region', { name: 'Histórico' });
     expect(within(historico).getByText('Manutenção solicitada')).not.toBeVisible();
