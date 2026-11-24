@@ -455,7 +455,8 @@ export function Solicitacoes() {
   const totalFiltros = Number(Boolean(filtroStatus)) + Number(semInteracao);
   const podeCriarManutencao = usuario?.perfil === 'UNIDADE' || pode(usuario, 'MANUTENCAO_ESCREVER');
   const podeCriarPatrimonio = usuario?.perfil === 'UNIDADE' || pode(usuario, 'SOLICITACOES_GERENCIAR');
-  const podeCriar = naTriagem ? podeCriarManutencao : podeCriarManutencao || podeCriarPatrimonio;
+  const podeProgramar = pode(usuario, 'MANUTENCAO_TRIAR');
+  const podeCriar = podeProgramar || (naTriagem ? podeCriarManutencao : podeCriarManutencao || podeCriarPatrimonio);
 
   return (
     <section
@@ -498,6 +499,14 @@ export function Solicitacoes() {
               {podeCriarManutencao && (!naTriagem || tipoTriagem === 'EQUIPAMENTO') &&
                 <Link to="/solicitacoes/nova?tipo=MANUTENCAO&natureza=EQUIPAMENTO">Manutenção de equipamentos</Link>}
               {!naTriagem && podeCriarPatrimonio && <Link to="/solicitacoes/nova">Demanda patrimonial</Link>}
+              {podeProgramar && (!tipoTriagem || tipoTriagem === 'CIVIL') && <>
+                <Link to="/programacoes/preventivas/nova?modalidade=CIVIL">Preventiva civil</Link>
+                <Link to="/programacoes/layout/nova?modalidade=CIVIL">Alteração de layout civil</Link>
+              </>}
+              {podeProgramar && (!tipoTriagem || tipoTriagem === 'EQUIPAMENTO') && <>
+                <Link to="/programacoes/preventivas/nova?modalidade=EQUIPAMENTO">Preventiva de equipamentos</Link>
+                <Link to="/programacoes/layout/nova?modalidade=EQUIPAMENTO">Alteração de layout de equipamentos</Link>
+              </>}
             </div>
           </div>
         )}

@@ -111,7 +111,7 @@ describe('Avaliação, agenda e programação de manutenção', () => {
   });
 
   it('cadastra programação de layout apenas para unidade ativa e perfil de triagem', async () => {
-    const body = { tipo: 'ALTERACAO_LAYOUT', unidadeId, titulo: 'Adequar recepção', dataPrevista: '2026-12-04' };
+    const body = { tipo: 'ALTERACAO_LAYOUT', modalidade: 'EQUIPAMENTO', unidadeId, titulo: 'Adequar recepção', dataPrevista: '2026-12-04' };
     expect((await request(app).post('/programacoes-manutencao').set(tecnico).send(body)).status).toBe(403);
     prismaMock.unidade.findFirst.mockResolvedValue(null);
     expect((await request(app).post('/programacoes-manutencao').set(administrador).send(body)).status).toBe(422);
@@ -119,7 +119,7 @@ describe('Avaliação, agenda e programação de manutenção', () => {
     prismaMock.programacaoManutencao.create.mockResolvedValue({ id: 'programacao' } as never);
     expect((await request(app).post('/programacoes-manutencao').set(administrador).send(body)).status).toBe(201);
     expect(prismaMock.programacaoManutencao.create.mock.calls[0][0].data).toMatchObject({
-      unidadeId, tipo: 'ALTERACAO_LAYOUT', dataPrevista: new Date('2026-12-04T00:00:00Z'), criadoPorId: 'user-1',
+      unidadeId, tipo: 'ALTERACAO_LAYOUT', modalidade: 'EQUIPAMENTO', dataPrevista: new Date('2026-12-04T00:00:00Z'), criadoPorId: 'user-1',
     });
   });
 });

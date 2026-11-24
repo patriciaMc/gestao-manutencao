@@ -1,12 +1,22 @@
 import { type FormEvent, useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useCarga } from '../hooks/useCarga';
 import type { Unidade } from '../types';
 import './PlanejamentoManutencao.css';
 
 export type TipoProgramacao = 'PREVENTIVA' | 'ALTERACAO_LAYOUT';
+const modalidades = { CIVIL: 'Civil', EQUIPAMENTO: 'Equipamentos' } as const;
+type Modalidade = keyof typeof modalidades;
+function modalidadeValida(valor: string | null): Modalidade | '' {
+  return valor === 'CIVIL' || valor === 'EQUIPAMENTO' ? valor : '';
+}
+function consultaModalidade(modalidade: Modalidade | '') {
+  return modalidade ? `?modalidade=${modalidade}` : '';
+}
+
 interface Programacao {
+  modalidade?: Modalidade | null;
   id: string; titulo: string; observacoes?: string; unidade: { nome: string };
   dataPrevista: string; concluidaEm: string | null;
 }
@@ -17,6 +27,8 @@ const titulo = (tipo: TipoProgramacao) => tipo === 'PREVENTIVA' ? 'Cronograma de
 const formatarDia = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/');
 
 export function CronogramaManutencao({ tipo }: { tipo: TipoProgramacao }) {
+  const [params, setParams] = useSearchParams();
+  const modalidade = modalidadeValida(params.get('modalidade'));
   const [unidadeId, setUnidadeId] = useState('');
   const [situacao, setSituacao] = useState('abertas');
   const [pagina, setPagina] = useState(1);
@@ -32,13 +44,14 @@ export function CronogramaManutencao({ tipo }: { tipo: TipoProgramacao }) {
     setCarregando(true);
     setErro('');
     const filtros = new URLSearchParams({ tipo, situacao, pagina: String(pagina) });
+    if (modalidade) filtros.set('modalidade', modalidade);
     if (unidadeId) filtros.set('unidadeId', unidadeId);
     api.get<Resultado>(`/programacoes-manutencao?${filtros}`)
       .then((valor) => { if (ativo) setDados(valor); })
       .catch((falha: Error) => { if (ativo) setErro(falha.message); })
       .finally(() => { if (ativo) setCarregando(false); });
     return () => { ativo = false; };
-  }, [tipo, unidadeId, situacao, pagina, atualizar]);
+  }, [tipo, modalidade, unidadeId, situacao, pagina, atualizar]);
 
   async function concluir(id: string) {
     setConcluindo(id);
@@ -57,12 +70,24 @@ export function CronogramaManutencao({ tipo }: { tipo: TipoProgramacao }) {
   return <section className="gestao-page" aria-labelledby="titulo-cronograma">
     <header className="page-header">
       <h2 id="titulo-cronograma">{titulo(tipo)}</h2>
-      <Link className="btn btn-primary" to={`${caminhoCronograma(tipo)}/nova`}>Nova programação</Link>
+      <Link className="btn btn-primary" to={`${caminhoCronograma(tipo)}/nova${consultaModalidade(modalidade)}`}>Nova programação</Link>
     </header>
     <section className="equipamento-secao planejamento-filtros" aria-label="Filtros do cronograma">
       <div className="field"><label htmlFor="cronograma-unidade">Unidade</label>
         <select id="cronograma-unidade" value={unidadeId} onChange={(evento) => { setPagina(1); setUnidadeId(evento.target.value); }}>
           <option value="">Todas as unidades</option>{unidades.dados?.map((unidade) => <option key={unidade.id} value={unidade.id}>{unidade.nome}</option>)}
+        </select></div>
+      <div className="field"><label htmlFor="cronograma-modalidade">Modalidade</label>
+        <select id="cronograma-modalidade" value={modalidade} onChange={(evento) => {
+          setPagina(1);
+          const selecionada = modalidadeValida(evento.target.value);
+          const novos = new URLSearchParams(params);
+          if (selecionada) novos.set('modalidade', selecionada);
+          else novos.delete('modalidade');
+          setParams(novos);
+        }}>
+          <option value="">Todas as modalidades</option>
+          {Object.entries(modalidades).map(([valor, nome]) => <option key={valor} value={valor}>{nome}</option>)}
         </select></div>
       <div className="field"><label htmlFor="cronograma-situacao">Situação</label>
         <select id="cronograma-situacao" value={situacao} onChange={(evento) => { setPagina(1); setSituacao(evento.target.value); }}>
@@ -78,7 +103,7 @@ export function CronogramaManutencao({ tipo }: { tipo: TipoProgramacao }) {
         <div className="planejamento-item-topo">
           <h3>{item.titulo}</h3><span>{item.concluidaEm ? 'Concluída' : 'Programada'} · {formatarDia(item.dataPrevista)}</span>
         </div>
-        <p>{item.unidade.nome}</p>
+        <p>{item.unidade.nome} · {item.modalidade ? modalidades[item.modalidade] : 'Modalidade não informada'}</p>
         {item.observacoes && <p>{item.observacoes}</p>}
         {!item.concluidaEm && <button className="btn btn-outline" type="button" disabled={concluindo !== null} onClick={() => void concluir(item.id)}>Marcar como concluída</button>}
       </article>)}</div>
@@ -93,8 +118,10 @@ export function CronogramaManutencao({ tipo }: { tipo: TipoProgramacao }) {
 
 export function NovaProgramacaoManutencao({ tipo }: { tipo: TipoProgramacao }) {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const modalidadeInicial = modalidadeValida(params.get('modalidade'));
   const unidades = useCarga(() => api.get<Unidade[]>('/unidades'), true, 'Não foi possível carregar as unidades.');
-  const [form, setForm] = useState({ unidadeId: '', titulo: '', dataPrevista: '', observacoes: '' });
+  const [form, setForm] = useState({ modalidade: modalidadeInicial, unidadeId: '', titulo: '', dataPrevista: '', observacoes: '' });
   const [gravando, setGravando] = useState(false);
   const [erro, setErro] = useState('');
   async function salvar(evento: FormEvent) {
@@ -104,7 +131,7 @@ export function NovaProgramacaoManutencao({ tipo }: { tipo: TipoProgramacao }) {
     setErro('');
     try {
       await api.post('/programacoes-manutencao', { ...form, tipo });
-      void navigate(caminhoCronograma(tipo), { replace: true });
+      void navigate(caminhoCronograma(tipo) + consultaModalidade(form.modalidade), { replace: true });
     } catch (falha) {
       setErro(falha instanceof Error ? falha.message : 'Não foi possível salvar a programação.');
       setGravando(false);
@@ -115,6 +142,11 @@ export function NovaProgramacaoManutencao({ tipo }: { tipo: TipoProgramacao }) {
     <form className="equipamento-secao planejamento-formulario" onSubmit={salvar}>
       <div className="field"><label htmlFor="programacao-titulo">Título</label>
         <input id="programacao-titulo" value={form.titulo} required minLength={3} maxLength={120} onChange={(evento) => setForm({ ...form, titulo: evento.target.value })} /></div>
+      <div className="field"><label htmlFor="programacao-modalidade">Modalidade</label>
+        <select id="programacao-modalidade" value={form.modalidade} required onChange={(evento) => setForm({ ...form, modalidade: modalidadeValida(evento.target.value) })}>
+          <option value="">Selecione uma modalidade</option>
+          {Object.entries(modalidades).map(([valor, nome]) => <option key={valor} value={valor}>{nome}</option>)}
+        </select></div>
       <div className="field"><label htmlFor="programacao-unidade">Unidade</label>
         <select id="programacao-unidade" value={form.unidadeId} required onChange={(evento) => setForm({ ...form, unidadeId: evento.target.value })}>
           <option value="">{unidades.carregando ? 'Carregando unidades…' : 'Selecione uma unidade'}</option>
@@ -125,8 +157,8 @@ export function NovaProgramacaoManutencao({ tipo }: { tipo: TipoProgramacao }) {
       <div className="field"><label htmlFor="programacao-observacao">Observações</label>
         <textarea id="programacao-observacao" rows={3} maxLength={2000} value={form.observacoes} onChange={(evento) => setForm({ ...form, observacoes: evento.target.value })} /></div>
       {(erro || unidades.falha) && <p role="alert">{erro || unidades.falha}</p>}
-      <div className="actions-row"><Link className="btn btn-outline" to={caminhoCronograma(tipo)}>Cancelar</Link>
-        <button className="btn btn-primary" type="submit" disabled={gravando || !form.unidadeId}>Salvar programação</button></div>
+      <div className="actions-row"><Link className="btn btn-outline" to={caminhoCronograma(tipo) + consultaModalidade(modalidadeInicial)}>Cancelar</Link>
+        <button className="btn btn-primary" type="submit" disabled={gravando || !form.unidadeId || !form.modalidade}>Salvar programação</button></div>
     </form>
   </section>;
 }

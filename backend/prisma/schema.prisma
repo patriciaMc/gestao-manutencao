@@ -1023,6 +1023,7 @@ enum TipoProgramacaoManutencao {
 model ProgramacaoManutencao {
   id             String                   @id @default(uuid())
   tipo           TipoProgramacaoManutencao
+  modalidade     TipoManutencao?
   unidadeId      String                   @map("unidade_id")
   unidade        Unidade                  @relation(fields: [unidadeId], references: [id], onDelete: Restrict)
   titulo         String

@@ -11,12 +11,14 @@ export const programacoesRouter = Router();
 programacoesRouter.use(autenticar, permitirCom('MANUTENCAO_TRIAR'));
 
 const tipoSchema = z.enum(['PREVENTIVA', 'ALTERACAO_LAYOUT']);
+const modalidadeSchema = z.enum(['CIVIL', 'EQUIPAMENTO']);
 const select = {
-  id: true, tipo: true, titulo: true, observacoes: true, dataPrevista: true, concluidaEm: true,
+  id: true, tipo: true, modalidade: true, titulo: true, observacoes: true, dataPrevista: true, concluidaEm: true,
   unidade: { select: { id: true, nome: true } },
 } as const;
 const entrada = z.object({
   tipo: tipoSchema,
+  modalidade: modalidadeSchema,
   unidadeId: z.string().uuid(),
   titulo: z.string().trim().min(3).max(120),
   dataPrevista: z.iso.date(),
@@ -24,6 +26,7 @@ const entrada = z.object({
 });
 const consulta = z.object({
   tipo: tipoSchema,
+  modalidade: modalidadeSchema.optional(),
   unidadeId: z.string().uuid().optional(),
   situacao: z.enum(['abertas', 'concluidas', 'todas']).default('abertas'),
   pagina: z.coerce.number().int().min(1).max(1000).default(1),
@@ -33,8 +36,8 @@ const POR_PAGINA = 25;
 programacoesRouter.get('/', async (req, res) => {
   const validacao = consulta.safeParse(req.query);
   if (!validacao.success) throw new AppError('Filtros do cronograma inválidos.', 422);
-  const { tipo, unidadeId, situacao, pagina } = validacao.data;
-  const where = { tipo, unidadeId, concluidaEm: situacao === 'todas' ? undefined : situacao === 'abertas' ? null : { not: null } };
+  const { tipo, modalidade, unidadeId, situacao, pagina } = validacao.data;
+  const where = { tipo, modalidade, unidadeId, concluidaEm: situacao === 'todas' ? undefined : situacao === 'abertas' ? null : { not: null } };
   const [total, itens] = await prisma.$transaction([
     prisma.programacaoManutencao.count({ where }),
     prisma.programacaoManutencao.findMany({ where, select, orderBy: [{ dataPrevista: 'asc' }, { id: 'asc' }], skip: (pagina - 1) * POR_PAGINA, take: POR_PAGINA }),
