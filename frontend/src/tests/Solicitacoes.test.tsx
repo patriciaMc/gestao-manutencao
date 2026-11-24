@@ -520,3 +520,26 @@ it('abre pelo sino a conversa com nova mensagem do chamado', async () => {
   await userEvent.click(alerta);
   expect(await screen.findByText('Visita confirmada.', { exact: true })).toBeVisible();
 });
+
+it('combina SLA civil e prestador e atualiza os indicadores da seleção', async () => {
+  const base = { tipo: 'CIVIL', status: 'AGUARDANDO_EXECUCAO', criadoEm: '2026-05-01', unidade: { id: 'u1', nome: 'UBS Centro' } };
+  const contrato = { id: 'c1', prestadorId: 'p1', prestador: { nome: 'Equipe Alfa' } };
+  abrirLista({ '/solicitacoes': { body: [] }, '/manutencoes': { body: [
+    { ...base, id: 'm1', numero: 1, titulo: 'Prazo vencido Alfa', slaCivilVenceEm: '2000-01-01', contrato },
+    { ...base, id: 'm2', numero: 2, titulo: 'No prazo Alfa', slaCivilVenceEm: '2099-01-01', contrato },
+    { ...base, id: 'm3', numero: 3, titulo: 'Prazo vencido Beta', slaCivilVenceEm: '2000-01-01',
+      contrato: { ...contrato, prestadorId: 'p2', prestador: { nome: 'Equipe Beta' } } },
+    { ...base, id: 'm4', numero: 4, titulo: 'Serviço programado', slaCivilIniciadoEm: '2026-05-01', contrato },
+  ] } });
+  const tabela = await screen.findByRole('table', { name: 'Solicitações da seleção atual' });
+  await within(tabela).findByText('Prazo vencido Alfa');
+  await userEvent.selectOptions(screen.getByLabelText('SLA civil'), 'vencido');
+  await userEvent.selectOptions(screen.getByLabelText('Prestador'), 'p1');
+  expect(within(tabela).getByText('Prazo vencido Alfa')).toBeVisible();
+  expect(within(tabela).queryByText('Prazo vencido Beta')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'SLA civil vencido 1' })).toBeVisible();
+  await userEvent.selectOptions(screen.getByLabelText('SLA civil'), 'programado');
+  expect(within(tabela).getByText('Serviço programado')).toBeVisible();
+  await userEvent.click(screen.getByRole('button', { name: 'Limpar filtros' }));
+  expect(within(tabela).getByText('No prazo Alfa')).toBeVisible();
+});

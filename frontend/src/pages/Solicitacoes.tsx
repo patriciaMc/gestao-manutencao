@@ -127,7 +127,10 @@ interface LinhaLista {
   categoria: string;
   servico: string;
   termosExtras: Array<string | null | undefined>;
+  civil?: boolean;
+  slaIniciadoEm?: string | null;
   prazoCivil?: string | null;
+  prestador?: { id: string; nome: string };
   statusValor: string;
   statusTexto: string;
   criadoEm: string;
@@ -173,7 +176,13 @@ const daManutencao = (m: Manutencao): LinhaLista => ({
   servico: m.contratoItem?.servico.nome ?? (m.tipo === 'CIVIL' ? 'Manutenção civil' : 'Manutenção de equipamentos'),
   termosExtras: [m.descricaoProblema, m.localAfetado, m.equipamento?.tombamento,
     m.equipamento?.descricao, m.equipamento?.tipoEquipamento?.nome],
+  civil: m.tipo === 'CIVIL',
+  slaIniciadoEm: m.slaCivilIniciadoEm,
   prazoCivil: m.slaCivilVenceEm,
+  prestador: m.contrato ? {
+    id: m.contrato.prestadorId ?? m.contrato.prestador.nome,
+    nome: m.contrato.prestador.nome,
+  } : undefined,
   statusValor: statusManutencaoExibido(m).valor,
   statusTexto: statusManutencaoExibido(m).texto,
   criadoEm: m.criadoEm,
@@ -189,12 +198,24 @@ const normalizarBusca = (texto: string) =>
 
 const encerrados = new Set(['BAIXADO', 'CANCELADA', 'CONCLUIDA', 'ENCERRADA', 'EXPIRADA', 'NEGADA']);
 const emAvaliacao = new Set(['AGUARDANDO_AVALIACAO_TECNICA', 'AGUARDANDO_VISTORIA']);
+const opcoesSla = {
+  no_prazo: 'No prazo',
+  vencido: 'Vencido',
+  programado: 'Programado · sem prazo automático',
+  nao_iniciado: 'Ainda não iniciado',
+} as const;
+
+function situacaoSla(linha: LinhaLista): keyof typeof opcoesSla | undefined {
+  if (!linha.civil || encerrados.has(linha.statusValor)) return;
+  if (linha.prazoCivil) return Date.parse(linha.prazoCivil) <= Date.now() ? 'vencido' : 'no_prazo';
+  return linha.slaIniciadoEm ? 'programado' : 'nao_iniciado';
+}
+
 const situacoes = [
   { id: '', nome: 'Total na seleção', inclui: () => true },
   { id: 'abertos', nome: 'Em aberto', inclui: (l: LinhaLista) => !encerrados.has(l.statusValor) },
   { id: 'avaliacao', nome: 'Em avaliação', inclui: (l: LinhaLista) => emAvaliacao.has(l.statusValor) },
-  { id: 'vencidos', nome: 'SLA civil vencido', inclui: (l: LinhaLista) =>
-    !encerrados.has(l.statusValor) && Boolean(l.prazoCivil && Date.parse(l.prazoCivil) <= Date.now()) },
+  { id: 'vencidos', nome: 'SLA civil vencido', inclui: (l: LinhaLista) => situacaoSla(l) === 'vencido' },
   { id: 'encerrados', nome: 'Encerrados', inclui: (l: LinhaLista) => encerrados.has(l.statusValor) },
 ];
 
@@ -220,6 +241,8 @@ export function Solicitacoes() {
   const tipoTriagem = podeTriar && filaValida(filtroTipo) ? FILAS_TRIAGEM[filtroTipo] : '';
   const naTriagem = Boolean(tipoTriagem);
   const [filtroCategoria, setFiltroCategoria] = useState('');
+  const [filtroSla, setFiltroSla] = useState('');
+  const [filtroPrestador, setFiltroPrestador] = useState('');
   const [filtroServico, setFiltroServico] = useState('');
   const [filtroSituacao, setFiltroSituacao] = useState('');
   const [filtroUnidade, setFiltroUnidade] = useState('');
@@ -314,6 +337,8 @@ export function Solicitacoes() {
     setFiltroStatus(statusOk ? statusDaUrl : '');
     setFiltroCategoria('');
     setFiltroServico('');
+    setFiltroSla('');
+    setFiltroPrestador('');
     setFiltroSituacao('');
   }, [tipoDaUrl, statusDaUrl, podeTriar]);
 
@@ -339,7 +364,7 @@ export function Solicitacoes() {
 
   useEffect(() => {
     setPagina(1);
-  }, [busca, filtroUnidade, filtroCategoria, filtroServico, filtroSituacao]);
+  }, [busca, filtroUnidade, filtroCategoria, filtroServico, filtroSla, filtroPrestador, filtroSituacao]);
 
   const termos = normalizarBusca(busca.trim()).split(/\s+/).filter(Boolean);
   const statusExtra = OPCOES_STATUS_EXTRA.some((o) => o.valor === filtroStatus);
@@ -354,11 +379,17 @@ export function Solicitacoes() {
     .map((l) => l.categoria), filtroCategoria);
   const servicos = opcoes(linhasDaUnidade.filter((l) => !filtroCategoria || l.categoria === filtroCategoria)
     .map((l) => l.servico), filtroServico);
+  const prestadores = [...new Map(linhas.flatMap(({ prestador }) =>
+    prestador ? [[prestador.id, prestador.nome] as const] : [])).entries()]
+    .sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'));
   const selecao = linhasDaUnidade.filter((l) => {
+    if (filtroSla && situacaoSla(l) !== filtroSla) return false;
+    if (filtroPrestador === 'sem_prestador' ? l.tipo !== TIPO_MANUTENCAO || l.prestador
+      : filtroPrestador && l.prestador?.id !== filtroPrestador) return false;
     if ((filtroCategoria && l.categoria !== filtroCategoria) || (filtroServico && l.servico !== filtroServico)) return false;
     if (!termos.length) return true;
     const indice = normalizarBusca([l.numero, l.numero.replace('-', ''), l.numero.replace(/-0*/, '-'), l.titulo, l.unidade,
-      l.categoria, l.servico, l.statusTexto, l.tipoTexto, ...l.termosExtras].filter(Boolean).join(' '));
+      l.categoria, l.servico, l.prestador?.nome, l.statusTexto, l.tipoTexto, ...l.termosExtras].filter(Boolean).join(' '));
     return termos.every((termo) => indice.includes(termo));
   });
   const incluiSituacao = situacoes.find(({ id }) => id === filtroSituacao)?.inclui;
@@ -370,6 +401,8 @@ export function Solicitacoes() {
     setFiltroStatus('');
     setFiltroCategoria('');
     setFiltroServico('');
+    setFiltroSla('');
+    setFiltroPrestador('');
     setFiltroSituacao('');
     setSemInteracao(false);
   }
@@ -382,6 +415,8 @@ export function Solicitacoes() {
     setFiltroTipo(tipo);
     setFiltroCategoria('');
     setFiltroServico('');
+    setFiltroSla('');
+    setFiltroPrestador('');
     setFiltroSituacao('');
     const statusValido =
       tipo === TIPO_MANUTENCAO ? filtroStatus in ROTULO_STATUS_MANUTENCAO : STATUS_POR_TIPO[tipo]?.includes(filtroStatus);
@@ -522,7 +557,7 @@ export function Solicitacoes() {
                 <IconeBusca />
                 <input
                   aria-label={naTriagem ? "Buscar chamados" : "Buscar solicitações"}
-                  placeholder="Número, título, unidade, categoria ou serviço"
+                  placeholder="Número, título, unidade, serviço ou prestador"
                   value={busca}
                   onChange={(e) => setBusca(e.target.value)}
                 />
@@ -582,6 +617,27 @@ export function Solicitacoes() {
                   {servicos.map((nome) => <option key={nome}>{nome}</option>)}
                 </select>
               </div>
+              {veManutencoes && (
+                <>
+                  {tipoTriagem !== 'EQUIPAMENTO' && <div className="field">
+                    <label htmlFor="chamados-sla">SLA civil</label>
+                    <select id="chamados-sla" value={filtroSla} onChange={(e) => setFiltroSla(e.target.value)}>
+                      <option value="">Qualquer situação de SLA</option>
+                      {Object.entries(opcoesSla).map(([valor, nome]) => <option key={valor} value={valor}>{nome}</option>)}
+                    </select>
+                  </div>}
+                  <div className="field">
+                    <label htmlFor="chamados-prestador">Prestador</label>
+                    <select id="chamados-prestador" value={filtroPrestador} onChange={(e) => setFiltroPrestador(e.target.value)}>
+                      <option value="">Todos os prestadores</option>
+                      <option value="sem_prestador">Sem prestador vinculado</option>
+                      {filtroPrestador && filtroPrestador !== 'sem_prestador' && !prestadores.some(([id]) => id === filtroPrestador) &&
+                        <option value={filtroPrestador}>Prestador selecionado</option>}
+                      {prestadores.map(([id, nome]) => <option key={id} value={id}>{nome}</option>)}
+                    </select>
+                  </div>
+                </>
+              )}
               <button type="button" className="btn btn-outline" onClick={limparFiltros}>Limpar filtros</button>
             </div>
           {filtrosAbertos && (
@@ -650,6 +706,7 @@ export function Solicitacoes() {
                     <td className="cartao-tipo">
                       <span className="inventario-data">{l.tipoTexto}</span>
                       <small className="chamados-tipo-detalhe">{l.categoria}{l.servico !== l.tipoTexto && ` · ${l.servico}`}</small>
+                      {l.prestador && <small className="chamados-tipo-detalhe">{l.prestador.nome}</small>}
                       {naTriagem && l.destaque?.nome && <span className="badge badge-gray solicitacoes-selo">{l.destaque.nome}</span>}
                       {l.emenda && <span className="badge badge-purple solicitacoes-selo">Emenda</span>}
                       {l.automatica && <span className="badge badge-gray solicitacoes-selo">Automática</span>}

@@ -301,7 +301,7 @@ export interface Manutencao {
   } | null;
   unidade: { id: string; nome: string };
   solicitante: { nome: string };
-  contrato?: { id: string; numero: string; prestador: { nome: string } } | null;
+  contrato?: { id: string; numero: string; prestadorId?: string; prestador: { nome: string } } | null;
   contratoItem?: { id: string; valor: string; descontoPercentual?: string; servico: { nome: string; exigeOrcamentoPrevio?: boolean } } | null;
 }
 
