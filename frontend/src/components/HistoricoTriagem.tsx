@@ -18,9 +18,10 @@ export function HistoricoTriagem({ caminho, unidade, categoria }: { caminho?: st
     Boolean(caminho),
     'Não foi possível carregar os chamados relacionados.',
   );
+  const titulo = (categoria || dados?.mesmaCategoria) ? 'Histórico de chamados da unidade na mesma categoria' : 'Histórico de chamados da unidade';
   return (
-    <aside className="equipamento-secao manutencao-historico-lateral" aria-label="Histórico de chamados da unidade">
-      <h3>Histórico de chamados da unidade</h3>
+    <aside className="equipamento-secao manutencao-historico-lateral" aria-label={titulo}>
+      <h3>{titulo}</h3>
       {unidade && <p>{unidade}{categoria ? ` · ${categoria}` : ''}</p>}
       {!caminho && <p>Selecione a unidade para consultar os chamados relacionados.</p>}
       {carregando && <p role="status">Buscando chamados…</p>}

@@ -798,7 +798,7 @@ function ConteudoManutencao({
           <TrajetoriaCaso manutencaoId={m.id} status={m.status} />
         </div>
 
-        <HistoricoRecolhivel id="historico-manutencao">
+        <HistoricoRecolhivel id="historico-manutencao" titulo="Histórico do chamado">
           {falhaHistorico && !historico ? (
             <div className="equipamento-historico-vazio" role="status">
               Não foi possível carregar o histórico.

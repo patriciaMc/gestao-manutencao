@@ -171,7 +171,7 @@ export function Solicitacoes() {
   const veManutencoes = pode(usuario, 'MANUTENCAO_CONSULTAR') || usuario?.perfil === 'UNIDADE' || usuario?.perfil === 'TERCEIRIZADA';
   const podeTriar = veManutencoes && pode(usuario, 'MANUTENCAO_TRIAR');
   const veSolicitacoes = usuario?.perfil !== 'TERCEIRIZADA';
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const [linhas, setLinhas] = useState<LinhaLista[]>([]);
   const [busca, setBusca] = useState('');
   const tipoDaUrl = params.get('tipo') ?? '';
@@ -306,8 +306,15 @@ export function Solicitacoes() {
     setFiltroTipo(tipo);
     const statusValido =
       tipo === TIPO_MANUTENCAO ? filtroStatus in ROTULO_STATUS_MANUTENCAO : STATUS_POR_TIPO[tipo]?.includes(filtroStatus);
-    if (filaValida(tipo) || (tipo && filtroStatus && !statusValido)) {
-      setFiltroStatus('');
+    const limparStatus = filaValida(tipo) || (tipo && filtroStatus && !statusValido);
+    if (limparStatus) setFiltroStatus('');
+    if (filaValida(tipo) || filaValida(tipoDaUrl)) {
+      const novos = new URLSearchParams(params);
+      if (tipo) novos.set('tipo', tipo);
+      else novos.delete('tipo');
+      if (filtroStatus && !limparStatus) novos.set('status', filtroStatus);
+      else novos.delete('status');
+      setParams(novos);
     }
   }
 

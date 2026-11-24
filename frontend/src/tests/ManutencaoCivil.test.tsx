@@ -144,7 +144,7 @@ describe('Manutenção civil', () => {
     await userEvent.type(screen.getByLabelText('Título'), 'Infiltração na recepção');
     await userEvent.type(screen.getByLabelText('Local afetado *'), 'Recepção');
     await userEvent.selectOptions(await screen.findByLabelText('Tipo de problema *'), 'cat-infiltracao');
-    const relacionados = screen.getByRole('complementary', { name: 'Histórico de chamados da unidade' });
+    const relacionados = screen.getByRole('complementary', { name: 'Histórico de chamados da unidade na mesma categoria' });
     expect(await within(relacionados).findByRole('link', { name: 'MAN-0074 · Infiltração anterior' })).toBeInTheDocument();
     expect(enviar).toBeDisabled();
     await userEvent.type(screen.getByLabelText('Descrição do problema *'), 'Mancha de umidade no teto');

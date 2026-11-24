@@ -40,6 +40,10 @@ it('combina os filtros visíveis da página e limpa a família ao trocar de cate
   });
   render(<App />);
   await screen.findByRole('option', { name: 'Climatização' });
+  expect(screen.getByRole('link', { name: 'Novo equipamento' })).toHaveAttribute('href', '/inventario/novo');
+  expect(screen.getByRole('link', { name: 'Cadastrar unidade' })).toHaveAttribute('href', '/configuracoes/unidades/nova');
+  expect(screen.getByRole('link', { name: 'Cadastrar categoria' })).toHaveAttribute('href', '/configuracoes/itens/categorias/nova');
+  expect(screen.getByRole('link', { name: 'Cadastrar tipo de item' })).toHaveAttribute('href', '/configuracoes/itens/tipos/novo');
   await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Filtrar por unidade' }), 'u');
   await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Filtrar por categoria' }), 'c');
   await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Filtrar por família' }), 't');

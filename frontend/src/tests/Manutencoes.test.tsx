@@ -90,11 +90,11 @@ describe('Manutenções', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByText('Não atinge a temperatura adequada')).toBeInTheDocument();
 
-    const lateral = await screen.findByRole('complementary', { name: 'Histórico de chamados da unidade' });
+    const lateral = await screen.findByRole('complementary', { name: 'Histórico de chamados da unidade na mesma categoria' });
     expect(await within(lateral).findByRole('link', { name: 'MAN-0005 · Revisão anterior' })).toHaveAttribute('href', '/manutencoes/anterior');
     expect(within(lateral).getByText('1 de 1 na mesma categoria')).toBeInTheDocument();
 
-    const historico = await screen.findByRole('region', { name: 'Histórico' });
+    const historico = await screen.findByRole('region', { name: 'Histórico do chamado' });
     expect(within(historico).getByText('Manutenção solicitada')).not.toBeVisible();
     await userEvent.click(within(historico).getByRole('button', { name: 'Expandir histórico' }));
     expect(within(historico).getByText('Manutenção solicitada')).toBeVisible();

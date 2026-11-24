@@ -183,8 +183,15 @@ export function Inventario() {
         <div>
           <h2 id="inventario-titulo">Inventário</h2>
         </div>
-        {podeEditar && (
-          <div className="inventario-lista-acoes">
+        <div className="inventario-lista-acoes">
+          <a href="#lista-equipamentos" className="btn btn-outline">Abrir lista de equipamentos</a>
+          {pode(usuario, 'CONFIGURACOES_GERENCIAR') && <>
+            <Link to="/configuracoes/unidades/nova" className="btn btn-outline">Cadastrar unidade</Link>
+            <Link to="/configuracoes/itens/categorias/nova" className="btn btn-outline">Cadastrar categoria</Link>
+            <Link to="/configuracoes/itens/tipos/novo" className="btn btn-outline">Cadastrar tipo de item</Link>
+          </>}
+          {podeEditar && <>
+
             <input
               ref={inputCsv}
               type="file"
@@ -207,12 +214,14 @@ export function Inventario() {
             <Link to="/inventario/novo" className="btn btn-primary">
               Novo equipamento
             </Link>
-          </div>
-        )}
+          </>}
+        </div>
       </div>
 
 
-      <div className="inventario-painel-controles">
+      <InventarioPainel unidadesPainel={usuario?.perfil === 'OPERADOR' ? unidades : unidades.filter((unidade) => unidade.id === usuario?.unidadeId)} filtros={{ busca, unidadeId: filtroUnidade, categoriaId: filtroCategoria, tipoEquipamentoId: filtroFamilia, status: filtroStatus }} versao={versaoPainel}
+        selecionar={(campo, id) => { if (campo === 'unidadeId') setFiltroUnidade(id); else if (campo === 'categoriaId') selecionarCategoria(id); else setFiltroFamilia(id); }} />
+      <div className="inventario-painel-controles" id="lista-equipamentos">
         <div className="inventario-controles" ref={controles}>
           <div className="inventario-indexbar">
             <div
@@ -340,8 +349,6 @@ export function Inventario() {
           {erroCadastros && <div role="alert" className="inventario-painel-erro">Falha ao carregar filtros: {erroCadastros}<button className="btn btn-outline" onClick={carregarCadastros}>Recarregar filtros</button></div>}
         </div>
       </div>
-      <InventarioPainel filtros={{ busca, unidadeId: filtroUnidade, categoriaId: filtroCategoria, tipoEquipamentoId: filtroFamilia, status: filtroStatus }} versao={versaoPainel}
-        selecionar={(campo, id) => { if (campo === 'unidadeId') setFiltroUnidade(id); else if (campo === 'categoriaId') selecionarCategoria(id); else setFiltroFamilia(id); }} />
       <div className="gestao-lista inventario-lista">
         <div
           className="gestao-tabela-scroll lista-cartoes lista-cartoes--inventario"

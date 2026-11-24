@@ -265,6 +265,15 @@ export function Layout() {
               >
                 {tab.icone} {tab.rotulo}
               </NavLink>
+              {tab.para === '/solicitacoes' && pode(usuario, 'MANUTENCAO_CONSULTAR') && pode(usuario, 'MANUTENCAO_TRIAR') && (
+                <div className="sidebar-submenu" role="group" aria-label="Triagens de Solicitações">
+                  {([['TRIAGEM_CIVIL', 'Triagem Civil'], ['TRIAGEM_EQUIPAMENTOS', 'Triagem Equipamentos']] as const).map(([tipo, rotulo]) => {
+                    const ativa = location.pathname === '/solicitacoes' && new URLSearchParams(location.search).get('tipo') === tipo;
+                    return <Link key={tipo} to={`/solicitacoes?tipo=${tipo}`} onClick={fecharSidebar}
+                      className={`sidebar-sublink${ativa ? ' active' : ''}`} aria-current={ativa ? 'page' : undefined}>{rotulo}</Link>;
+                  })}
+                </div>
+              )}
               {tab.sub && location.pathname.startsWith(tab.para) && (
                 <div className="sidebar-submenu" role="group" aria-label={`Submenus de ${tab.rotulo}`}>
                   {tab.sub.map((item) => (

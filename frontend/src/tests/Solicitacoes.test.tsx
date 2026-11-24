@@ -36,13 +36,12 @@ describe('Solicitações (UC10/UC13/UC16)', () => {
     });
     render(<App />);
     await userEvent.click(await within(await screen.findByRole('navigation')).findByRole('link', { name: /solicitações/i }));
-    await userEvent.click(await screen.findByRole('button', { name: 'Todas' }));
-    await userEvent.click(screen.getByRole('menuitemradio', { name: 'Triagem Civil' }));
+    const submenus = screen.getByRole('group', { name: 'Triagens de Solicitações' });
+    await userEvent.click(within(submenus).getByRole('link', { name: 'Triagem Civil' }));
     await screen.findByText('Vazamento contínuo');
     const tabela = screen.getByRole('table', { name: 'Solicitações da seleção atual' });
     expect(within(tabela).getAllByText(/^MAN-/).map((el) => el.textContent)).toEqual(['MAN-0002', 'MAN-0001']);
-    await userEvent.click(screen.getByRole('button', { name: 'Triagem Civil' }));
-    await userEvent.click(screen.getByRole('menuitemradio', { name: 'Triagem Equipamentos' }));
+    await userEvent.click(within(submenus).getByRole('link', { name: 'Triagem Equipamentos' }));
     expect(await within(tabela).findByText('MAN-0003')).toBeInTheDocument();
     expect(within(tabela).queryByText('MAN-0002')).not.toBeInTheDocument();
     expect(chamadas.some(({ url }) => url.endsWith('/manutencoes?tipo=EQUIPAMENTO&status=AVALIADO'))).toBe(true);
