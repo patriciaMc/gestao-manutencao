@@ -27,6 +27,7 @@ describe('Solicitações (UC10/UC13/UC16)', () => {
     const ar = { ...base, id: 'm3', numero: 3, titulo: 'Reparo do aparelho', tipo: 'EQUIPAMENTO', status: 'AVALIADO', criadoEm: '2026-05-03', equipamento: { descricao: 'Ar-condicionado' } };
     const chamadas = mockFetch({
       '/auth/me': { body: { ...me['/auth/me'].body, perfil: 'OPERADOR', permissoes: ['MANUTENCAO_CONSULTAR', 'MANUTENCAO_TRIAR'] } },
+      '/unidades': { body: [{ id: 'u1', nome: 'UBS Centro' }] },
       '/solicitacoes': { body: [] },
       '/manutencoes?tipo=CIVIL&status=PENDENTE_APROVACAO': { body: [reparo, vazamento] },
       '/manutencoes?tipo=CIVIL&status=AVALIADO': { body: [] },
@@ -41,6 +42,15 @@ describe('Solicitações (UC10/UC13/UC16)', () => {
     await screen.findByText('Vazamento contínuo');
     const tabela = screen.getByRole('table', { name: 'Solicitações da seleção atual' });
     expect(within(tabela).getAllByText(/^MAN-/).map((el) => el.textContent)).toEqual(['MAN-0002', 'MAN-0001']);
+    await userEvent.selectOptions(await screen.findByLabelText('Unidade'), 'u1');
+    await userEvent.selectOptions(screen.getByLabelText('Status'), 'CONCLUIDA');
+    await userEvent.type(screen.getByRole('textbox', { name: 'Buscar chamados' }), 'MAN-0001');
+    await waitFor(() => expect(chamadas.some(({ url }) =>
+      url.endsWith('/manutencoes?busca=MAN-0001&unidadeId=u1&tipo=CIVIL&status=CONCLUIDA'),
+    )).toBe(true));
+    await userEvent.click(screen.getByRole('button', { name: 'Limpar filtros' }));
+    expect(screen.getByLabelText('Unidade')).toHaveValue('');
+    expect(screen.getByLabelText('Status')).toHaveValue('');
     await userEvent.click(within(submenus).getByRole('link', { name: 'Triagem Equipamentos' }));
     expect(await within(tabela).findByText('MAN-0003')).toBeInTheDocument();
     expect(within(tabela).queryByText('MAN-0002')).not.toBeInTheDocument();

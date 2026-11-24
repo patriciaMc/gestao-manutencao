@@ -61,12 +61,14 @@ async function idsSemInteracao() {
 
 export async function listar(
   usuario: AuthPayload,
-  filtros: { status?: StatusManutencao; busca?: string; tipo?: TipoManutencao; semInteracao?: boolean },
+  filtros: { status?: StatusManutencao; busca?: string; tipo?: TipoManutencao; unidadeId?: string; semInteracao?: boolean },
 ) {
   if (usuario.perfil === 'TERCEIRIZADA' && !usuario.prestadorId) return [];
+  if (usuario.perfil === 'UNIDADE' && filtros.unidadeId && filtros.unidadeId !== usuario.unidadeId) return [];
   const semInteracaoIds = filtros.semInteracao ? await idsSemInteracao() : undefined;
   const prestadorId = usuario.prestadorId;
   const where: Prisma.ManutencaoWhereInput = {
+    ...(filtros.unidadeId ? { unidadeId: filtros.unidadeId } : {}),
     ...(usuario.perfil === 'UNIDADE' ? { unidadeId: usuario.unidadeId ?? '' } : {}),
     // Terceirizada: só as manutenções cobertas por contratos do seu prestador (o prestador vem do token)
     ...(usuario.perfil === 'TERCEIRIZADA' && prestadorId ? { contrato: { prestadorId } } : {}),
@@ -80,6 +82,8 @@ export async function listar(
             { equipamento: { tombamento: { contains: filtros.busca, mode: 'insensitive' as const } } },
             { equipamento: { descricao: { contains: filtros.busca, mode: 'insensitive' as const } } },
             { unidade: { nome: { contains: filtros.busca, mode: 'insensitive' as const } } },
+            { categoriaCivil: { nome: { contains: filtros.busca, mode: 'insensitive' as const } } },
+            { equipamento: { tipoEquipamento: { categoria: { nome: { contains: filtros.busca, mode: 'insensitive' as const } } } } },
             { descricaoProblema: { contains: filtros.busca, mode: 'insensitive' as const } },
             { titulo: { contains: filtros.busca, mode: 'insensitive' as const } },
             { localAfetado: { contains: filtros.busca, mode: 'insensitive' as const } },

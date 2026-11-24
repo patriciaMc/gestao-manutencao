@@ -71,8 +71,11 @@ manutencoesRouter.get('/', leitura, async (req, res) => {
   if (tipo !== undefined && (typeof tipo !== 'string' || !TIPOS_MANUTENCAO.has(tipo))) {
     throw new AppError('Tipo de manutenção inválido.', 422);
   }
+  const unidade = z.string().uuid().optional().safeParse(req.query.unidadeId);
+  if (!unidade.success) throw new AppError('Unidade inválida.', 422);
   const manutencoes = await service.listar(req.usuario!, {
     tipo: tipo as TipoManutencao | undefined,
+    unidadeId: unidade.data,
     status: bruto as StatusManutencao | undefined,
     busca: typeof req.query.busca === 'string' ? req.query.busca : undefined,
     semInteracao: req.query.semInteracao === 'true',

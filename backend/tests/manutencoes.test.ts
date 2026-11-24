@@ -616,6 +616,18 @@ describe('Leitura de manutenções: quem acessa', () => {
     // status válido + tipo válido: só esses dois chegam ao banco
     expect(prismaMock.manutencao.findMany).toHaveBeenCalledTimes(2);
   });
+
+  it('combina os filtros de unidade, status e modalidade sem ampliar o escopo da Unidade', async () => {
+    const unidadeId = '77777777-7777-4777-8777-777777777777';
+    const rota = `/manutencoes?tipo=CIVIL&status=CONCLUIDA&unidadeId=${unidadeId}`;
+    prismaMock.manutencao.findMany.mockResolvedValue([]);
+    expect((await request(app).get(rota).set(auth('OPERADOR'))).status).toBe(200);
+    expect(prismaMock.manutencao.findMany.mock.calls[0][0]?.where).toMatchObject({ unidadeId, tipo: 'CIVIL', status: 'CONCLUIDA' });
+    const outraUnidade = await request(app).get(rota).set(auth('UNIDADE', { unidadeId: 'outra-unidade' }));
+    expect(outraUnidade.body).toEqual([]);
+    expect(prismaMock.manutencao.findMany).toHaveBeenCalledTimes(1);
+  });
+
 });
 
 describe('Terceirizada (prestador de serviço)', () => {

@@ -14,7 +14,7 @@ import './Solicitacoes.css';
 import { statusExibido, tituloSolicitacao } from '../utils/solicitacao';
 import { destaqueTriagem } from '../utils/triagem';
 import { tituloManutencao } from '../utils/manutencao';
-import type { Manutencao, Solicitacao } from '../types';
+import type { Manutencao, Solicitacao, Unidade } from '../types';
 import {
   codigoManutencao,
   formatarData,
@@ -25,6 +25,7 @@ import {
   codigoSolicitacao,
 } from '../utils/format';
 import { EsqueletoTabela } from '../components/Esqueletos';
+import { useCarga } from '../hooks/useCarga';
 import { useAlertaNativo } from '../hooks/useAlertaNativo';
 
 // Pseudo-status calculados por statusExibido() que não existem como valor
@@ -107,6 +108,7 @@ const STATUS_SO_DE_MANUTENCAO = Object.entries(ROTULO_STATUS_MANUTENCAO).filter(
   ([valor]) => !(valor in ROTULO_STATUS_SOLICITACAO),
 );
 
+const TODOS_STATUS_TRIAGEM = 'TODOS';
 const FILAS_TRIAGEM = { TRIAGEM_CIVIL: 'CIVIL', TRIAGEM_EQUIPAMENTOS: 'EQUIPAMENTO' } as const;
 function filaValida(tipo: string): tipo is keyof typeof FILAS_TRIAGEM {
   return Object.hasOwn(FILAS_TRIAGEM, tipo);
@@ -180,11 +182,16 @@ export function Solicitacoes() {
     tipoDaUrl === TIPO_MANUTENCAO || tipoDaUrl in ROTULO_TIPO_SOLICITACAO || (podeTriar && filaValida(tipoDaUrl)) ? tipoDaUrl : '',
   );
   const statusInicialValido =
+    (podeTriar && filaValida(tipoDaUrl) && statusDaUrl === TODOS_STATUS_TRIAGEM) ||
     statusDaUrl in ROTULO_STATUS_SOLICITACAO ||
     statusDaUrl in ROTULO_STATUS_MANUTENCAO ||
     OPCOES_STATUS_EXTRA.some((o) => o.valor === statusDaUrl);
   const tipoTriagem = podeTriar && filaValida(filtroTipo) ? FILAS_TRIAGEM[filtroTipo] : '';
   const naTriagem = Boolean(tipoTriagem);
+  const [filtroUnidade, setFiltroUnidade] = useState('');
+  const { dados: unidades, carregando: carregandoUnidades, falha: falhaUnidades } = useCarga(
+    () => api.get<Unidade[]>('/unidades'), naTriagem, 'Não foi possível carregar as unidades.',
+  );
   const [filtroStatus, setFiltroStatus] = useState(statusInicialValido ? statusDaUrl : '');
   // Só chamados de manutenção: os que ninguém tocou ainda (sem mensagem no chat nem mudança de status)
   const [semInteracao, setSemInteracao] = useState(false);
@@ -213,11 +220,13 @@ export function Solicitacoes() {
       !naTriagem &&
       filtroTipo !== TIPO_MANUTENCAO &&
       (!filtroStatus || Boolean(extra) || filtroStatus in ROTULO_STATUS_SOLICITACAO);
+    const statusTodos = naTriagem && filtroStatus === TODOS_STATUS_TRIAGEM;
     const buscarManutencoes =
-      veManutencoes && (!filtroTipo || filtroTipo === TIPO_MANUTENCAO || naTriagem) && (!filtroStatus || filtroStatus in ROTULO_STATUS_MANUTENCAO);
+      veManutencoes && (!filtroTipo || filtroTipo === TIPO_MANUTENCAO || naTriagem) && (!filtroStatus || statusTodos || filtroStatus in ROTULO_STATUS_MANUTENCAO);
     const consulta = (statusBackend: string, tipo = '') => {
       const p = new URLSearchParams();
-      if (busca) p.set('busca', busca);
+      if (busca.trim()) p.set('busca', busca.trim());
+      if (naTriagem && filtroUnidade) p.set('unidadeId', filtroUnidade);
       if (tipo) p.set('tipo', tipo);
       if (statusBackend) p.set('status', statusBackend);
       if (semInteracao && (tipo === '' || naTriagem)) p.set('semInteracao', 'true');
@@ -229,7 +238,7 @@ export function Solicitacoes() {
       pedidos.push(api.get<Solicitacao[]>(`/solicitacoes?${p}`).then((l) => l.map(daSolicitacao)));
     }
     if (buscarManutencoes) {
-      const status = naTriagem && !filtroStatus ? ['PENDENTE_APROVACAO', 'AVALIADO'] : [filtroStatus];
+      const status = naTriagem && !filtroStatus ? ['PENDENTE_APROVACAO', 'AVALIADO'] : [statusTodos ? '' : filtroStatus];
       for (const etapa of status) {
         pedidos.push(api.get<Manutencao[]>(`/manutencoes?${consulta(etapa, tipoTriagem)}`).then((l) => l.map(daManutencao)));
       }
@@ -252,7 +261,7 @@ export function Solicitacoes() {
       .finally(() => {
         if (idRequisicao === requisicao.current) setCarregando(false);
       });
-  }, [busca, filtroTipo, filtroStatus, semInteracao, veSolicitacoes, veManutencoes, naTriagem, tipoTriagem]);
+  }, [busca, filtroTipo, filtroStatus, semInteracao, veSolicitacoes, veManutencoes, naTriagem, tipoTriagem, filtroUnidade]);
 
   useEffect(() => {
     carregar();
@@ -265,6 +274,7 @@ export function Solicitacoes() {
   useEffect(() => {
     setFiltroTipo(tipoDaUrl === TIPO_MANUTENCAO || tipoDaUrl in ROTULO_TIPO_SOLICITACAO || (podeTriar && filaValida(tipoDaUrl)) ? tipoDaUrl : '');
     const statusOk =
+      (podeTriar && filaValida(tipoDaUrl) && statusDaUrl === TODOS_STATUS_TRIAGEM) ||
       statusDaUrl in ROTULO_STATUS_SOLICITACAO ||
       statusDaUrl in ROTULO_STATUS_MANUTENCAO ||
       OPCOES_STATUS_EXTRA.some((o) => o.valor === statusDaUrl);
@@ -332,7 +342,7 @@ export function Solicitacoes() {
   ];
   const opcoesDeStatus: Array<[string, string]> =
     naTriagem
-      ? Object.entries(ROTULO_STATUS_MANUTENCAO).filter(([status]) => status === 'PENDENTE_APROVACAO' || status === 'AVALIADO')
+      ? [[TODOS_STATUS_TRIAGEM, 'Todos os status'], ...Object.entries(ROTULO_STATUS_MANUTENCAO)]
       : filtroTipo === TIPO_MANUTENCAO
       ? Object.entries(ROTULO_STATUS_MANUTENCAO)
       : filtroTipo
@@ -413,8 +423,8 @@ export function Solicitacoes() {
               <div className="inventario-consulta-busca">
                 <IconeBusca />
                 <input
-                  aria-label="Buscar solicitações"
-                  placeholder="Buscar e filtrar"
+                  aria-label={naTriagem ? "Buscar chamados" : "Buscar solicitações"}
+                  placeholder={naTriagem ? "Número MAN, título, categoria ou descrição" : "Buscar e filtrar"}
                   value={busca}
                   onChange={(e) => setBusca(e.target.value)}
                 />
@@ -437,9 +447,32 @@ export function Solicitacoes() {
               </button>
             </div>
           </div>
+          {naTriagem && (
+            <div className="triagem-filtros">
+              <div className="field">
+                <label htmlFor="triagem-filtro-unidade">Unidade</label>
+                <select id="triagem-filtro-unidade" value={filtroUnidade} disabled={carregandoUnidades || Boolean(falhaUnidades)}
+                  onChange={(evento) => setFiltroUnidade(evento.target.value)}>
+                  <option value="">{carregandoUnidades ? 'Carregando unidades…' : 'Todas as unidades'}</option>
+                  {unidades?.map((unidade) => <option key={unidade.id} value={unidade.id}>{unidade.nome}</option>)}
+                </select>
+                {falhaUnidades && <small role="status">Não foi possível carregar as unidades.</small>}
+              </div>
+              <div className="field">
+                <label htmlFor="triagem-filtro-status">Status</label>
+                <select id="triagem-filtro-status" value={filtroStatus} onChange={(evento) => setFiltroStatus(evento.target.value)}>
+                  <option value="">Pendentes e avaliados</option>
+                  {opcoesDeStatus.map(([valor, rotulo]) => <option key={valor} value={valor}>{rotulo}</option>)}
+                </select>
+              </div>
+              <button type="button" className="btn btn-outline" onClick={() => {
+                setBusca(''); setFiltroUnidade(''); setFiltroStatus(''); setSemInteracao(false);
+              }}>Limpar filtros</button>
+            </div>
+          )}
           {filtrosAbertos && (
             <div className="inventario-filtros-popover">
-              <label className="gestao-filtro-select">
+              {!naTriagem && <label className="gestao-filtro-select">
                 <span>Status</span>
                 <select
                   aria-label="Filtrar por status"
@@ -453,7 +486,7 @@ export function Solicitacoes() {
                     </option>
                   ))}
                 </select>
-              </label>
+              </label>}
               {veManutencoes && (
                 <label className="gestao-filtro-select checkbox-linha interruptor-linha filtro-interruptor">
                   <input type="checkbox" role="switch" checked={semInteracao} onChange={(e) => setSemInteracao(e.target.checked)} />
