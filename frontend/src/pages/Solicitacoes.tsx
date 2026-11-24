@@ -467,13 +467,6 @@ export function Solicitacoes() {
         <div>
           <h2 id="solicitacoes-titulo">Solicitações</h2>
         </div>
-        {(naTriagem ? podeCriarManutencao : podeCriarPatrimonio) && (
-          <div className="inventario-lista-acoes">
-            <Link to={naTriagem ? `/solicitacoes/nova?tipo=MANUTENCAO&natureza=${tipoTriagem}` : "/solicitacoes/nova"} className="btn btn-primary">
-              {naTriagem ? (tipoTriagem === 'CIVIL' ? 'Nova triagem Civil' : 'Nova triagem Equipamentos') : 'Nova solicitação'}
-            </Link>
-          </div>
-        )}
       </div>
 
 
@@ -495,10 +488,10 @@ export function Solicitacoes() {
             <h3><IconeCarta /> Nova demanda</h3>
             <div>
               {podeCriarManutencao && (!naTriagem || tipoTriagem === 'CIVIL') &&
-                <Link to="/solicitacoes/nova?tipo=MANUTENCAO&natureza=CIVIL">Manutenção civil</Link>}
+                <Link to="/solicitacoes/nova?tipo=MANUTENCAO&natureza=CIVIL">Abrir chamado civil</Link>}
               {podeCriarManutencao && (!naTriagem || tipoTriagem === 'EQUIPAMENTO') &&
-                <Link to="/solicitacoes/nova?tipo=MANUTENCAO&natureza=EQUIPAMENTO">Manutenção de equipamentos</Link>}
-              {!naTriagem && podeCriarPatrimonio && <Link to="/solicitacoes/nova">Demanda patrimonial</Link>}
+                <Link to="/solicitacoes/nova?tipo=MANUTENCAO&natureza=EQUIPAMENTO">Abrir chamado de equipamentos</Link>}
+              {!naTriagem && podeCriarPatrimonio && <Link to="/solicitacoes/nova">Nova solicitação patrimonial</Link>}
               {podeProgramar && (!tipoTriagem || tipoTriagem === 'CIVIL') && <>
                 <Link to="/programacoes/preventivas/nova?modalidade=CIVIL">Preventiva civil</Link>
                 <Link to="/programacoes/layout/nova?modalidade=CIVIL">Alteração de layout civil</Link>

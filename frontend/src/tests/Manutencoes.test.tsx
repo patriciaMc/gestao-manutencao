@@ -275,7 +275,7 @@ describe('Manutenções', () => {
     });
     render(<App />);
 
-    await userEvent.click(await screen.findByRole('link', { name: 'Nova solicitação' }));
+    await userEvent.click(await screen.findByRole('link', { name: 'Nova solicitação patrimonial' }));
     const tipo = await screen.findByLabelText('Tipo');
     expect(within(tipo).getByRole('option', { name: 'Manutenção' })).toBeInTheDocument();
     await userEvent.selectOptions(tipo, 'MANUTENCAO');
@@ -429,7 +429,7 @@ describe('Manutenções', () => {
       });
       render(<App />);
       await screen.findByText('Geladeira parou');
-      expect(screen.queryByRole('link', { name: 'Nova solicitação' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Nova solicitação patrimonial' })).not.toBeInTheDocument();
       expect(chamadas.some((c) => c.url.includes('/solicitacoes'))).toBe(false);
       await userEvent.click(screen.getByRole('button', { name: 'Todas' }));
       const itens = screen.getAllByRole('menuitemradio').map((i) => i.textContent?.trim());

@@ -26,7 +26,7 @@ describe('Solicitações (UC10/UC13/UC16)', () => {
     const vazamento = { ...base, id: 'm2', numero: 2, titulo: 'Reparo no corredor', criadoEm: '2026-05-02', descricaoProblema: 'Vazamento contínuo' };
     const ar = { ...base, id: 'm3', numero: 3, titulo: 'Reparo do aparelho', tipo: 'EQUIPAMENTO', status: 'AVALIADO', criadoEm: '2026-05-03', equipamento: { descricao: 'Ar-condicionado' } };
     const chamadas = mockFetch({
-      '/auth/me': { body: { ...me['/auth/me'].body, perfil: 'OPERADOR', permissoes: ['MANUTENCAO_CONSULTAR', 'MANUTENCAO_TRIAR'] } },
+      '/auth/me': { body: { ...me['/auth/me'].body, perfil: 'OPERADOR', permissoes: ['MANUTENCAO_CONSULTAR', 'MANUTENCAO_TRIAR', 'MANUTENCAO_ESCREVER'] } },
       '/unidades': { body: [{ id: 'u1', nome: 'UBS Centro' }] },
       '/solicitacoes': { body: [] },
       '/manutencoes?tipo=CIVIL&status=PENDENTE_APROVACAO': { body: [reparo, vazamento] },
@@ -40,6 +40,10 @@ describe('Solicitações (UC10/UC13/UC16)', () => {
     const submenus = screen.getByRole('group', { name: 'Triagens de Solicitações' });
     await userEvent.click(within(submenus).getByRole('link', { name: 'Triagem Civil' }));
     await screen.findByText('Vazamento contínuo');
+    expect(screen.getByRole('link', { name: 'Abrir chamado civil' })).toHaveAttribute(
+      'href', '/solicitacoes/nova?tipo=MANUTENCAO&natureza=CIVIL',
+    );
+    expect(screen.queryByRole('link', { name: /nova triagem/i })).not.toBeInTheDocument();
     const tabela = screen.getByRole('table', { name: 'Solicitações da seleção atual' });
     expect(within(tabela).getAllByText(/^MAN-/).map((el) => el.textContent)).toEqual(['MAN-0002', 'MAN-0001']);
     await userEvent.type(screen.getByRole('textbox', { name: 'Buscar chamados' }), 'eletrica centro');
@@ -60,6 +64,10 @@ describe('Solicitações (UC10/UC13/UC16)', () => {
     expect(screen.getByLabelText('Status')).toHaveValue('');
     await userEvent.click(within(submenus).getByRole('link', { name: 'Triagem Equipamentos' }));
     expect(await within(tabela).findByText('MAN-0003')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Abrir chamado de equipamentos' })).toHaveAttribute(
+      'href', '/solicitacoes/nova?tipo=MANUTENCAO&natureza=EQUIPAMENTO',
+    );
+    expect(screen.queryByRole('link', { name: /nova triagem/i })).not.toBeInTheDocument();
     expect(within(tabela).queryByText('MAN-0002')).not.toBeInTheDocument();
     expect(chamadas.some(({ url }) => url.endsWith('/manutencoes?tipo=EQUIPAMENTO&status=AVALIADO'))).toBe(true);
   });

@@ -386,7 +386,10 @@ export function NovaSolicitacao() {
     <section className="gestao-page equipamento-pagina nova-solicitacao" aria-labelledby="nova-solicitacao-titulo">
       <div className="equipamento-pagina-cabecalho">
         <div className="equipamento-titulo-linha">
-          <h2 id="nova-solicitacao-titulo">Nova solicitação</h2>
+          <h2 id="nova-solicitacao-titulo">
+            {tipo === 'MANUTENCAO_CIVIL' ? 'Abrir chamado civil'
+              : tipo === 'MANUTENCAO' ? 'Abrir chamado de equipamentos' : 'Nova solicitação'}
+          </h2>
         </div>
         <div className="nova-solicitacao-acoes">
           <button type="button" className="btn btn-outline" onClick={voltar}>
