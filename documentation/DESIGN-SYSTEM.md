@@ -13,6 +13,8 @@ Este documento registra a direção visual e as decisões de UX da plataforma. A
 
 Sob **Solicitações** no menu, as subopções **Triagem Civil** e **Triagem Equipamentos** filtram os chamados da respectiva modalidade que aguardam decisão ou retornaram da avaliação técnica. Na abertura e no detalhe, o histórico de chamados da mesma unidade e categoria fica à esquerda do conteúdo no desktop e acima dele em telas estreitas. Os destaques operacionais ordenam a fila sem mudar a prioridade registrada no chamado.
 
+**Avaliação Técnica** abre a fila de chamados enviados pela triagem. Os submenus **Agenda de visitas** e **Anotações e pareceres** mantêm o número MAN e levam ao detalhe original do chamado. **Preventivas e layout** agrupa dois cronogramas independentes, com cadastro em página própria.
+
 ## Fundamentos
 
 Tokens globais em `frontend/src/styles.css`; padrões das telas autenticadas em `frontend/src/components/Gestao.css` (estrutura) e `frontend/src/components/Polaris.css` (refinamentos e novos padrões — é o arquivo a estender). Estilos específicos de uma área ficam ao lado da página (`pages/*.css`).

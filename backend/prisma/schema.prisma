@@ -211,6 +211,8 @@ model Usuario {
   unidadesResponsavel    Unidade[]             @relation("UnidadeResponsavel")
   avisos                 AvisoUsuario[]
   relatosProblema        RelatoProblema[]
+  anotacoesTecnicas      AnotacaoTecnica[]
+  programacoesManutencao ProgramacaoManutencao[]
   problemasCriados       ManutencaoProblema[]  @relation("ProblemaCriadoPor")
 
   @@index([prestadorId])
@@ -256,6 +258,7 @@ model Unidade {
   setores                 Setor[]
   atasEspecificas         Ata[]                 @relation("AtaUnidadeEspecifica")
   estoquesGalpao          EstoqueGalpao[]
+  programacoesManutencao  ProgramacaoManutencao[]
 
   @@map("unidade")
 }
@@ -382,6 +385,7 @@ model Manutencao {
   parecerTecnico               String?              @map("parecer_tecnico")
   // O que a avaliação técnica pediu ao solicitante ao devolver o chamado à triagem (limpo ao aprovar de novo)
   informacoesSolicitadas       String?              @map("informacoes_solicitadas")
+  vistoriaAgendadaEm           DateTime?            @map("vistoria_agendada_em")
   parecerVistoria              String?              @map("parecer_vistoria")
   orientacoesTerceirizada      String?              @map("orientacoes_terceirizada")
   // Setores afetados (um ou mais); localAfetado guarda os nomes em texto para listas e buscas
@@ -456,6 +460,7 @@ model Manutencao {
   mensagens           MensagemChat[]
   leituras            LeituraConversa[]
   linhasRelatorio     LinhaRelatorioManutencao[]
+  anotacoesTecnicas   AnotacaoTecnica[]
   avisos              AvisoUsuario[]
   // Baixas geradas a partir deste atendimento (substituição automática)
   solicitacoesGeradas Solicitacao[]              @relation("SolicitacaoDaManutencao")
@@ -465,6 +470,7 @@ model Manutencao {
   @@index([casoId])
   @@index([reencaminhadoDeId])
   @@index([categoriaCivilId])
+  @@index([status, vistoriaAgendadaEm])
   @@map("manutencao")
 }
 
@@ -982,4 +988,39 @@ model RelatoProblema {
   @@index([status, criadoEm])
   @@index([usuarioId])
   @@map("relato_problema")
+}
+
+model AnotacaoTecnica {
+  id           String     @id @default(uuid())
+  manutencaoId String     @map("manutencao_id")
+  manutencao   Manutencao @relation(fields: [manutencaoId], references: [id], onDelete: Restrict)
+  autorId      String     @map("autor_id")
+  autor        Usuario    @relation(fields: [autorId], references: [id], onDelete: Restrict)
+  texto        String
+  criadoEm     DateTime   @default(now()) @map("criado_em")
+
+  @@index([manutencaoId, criadoEm])
+  @@map("anotacao_tecnica")
+}
+
+enum TipoProgramacaoManutencao {
+  PREVENTIVA
+  ALTERACAO_LAYOUT
+}
+
+model ProgramacaoManutencao {
+  id             String                   @id @default(uuid())
+  tipo           TipoProgramacaoManutencao
+  unidadeId      String                   @map("unidade_id")
+  unidade        Unidade                  @relation(fields: [unidadeId], references: [id], onDelete: Restrict)
+  titulo         String
+  observacoes    String?
+  dataPrevista   DateTime                 @map("data_prevista") @db.Date
+  concluidaEm    DateTime?                @map("concluida_em")
+  criadoPorId    String                   @map("criado_por_id")
+  criadoPor      Usuario                  @relation(fields: [criadoPorId], references: [id], onDelete: Restrict)
+  criadoEm       DateTime                 @default(now()) @map("criado_em")
+
+  @@index([tipo, dataPrevista])
+  @@map("programacao_manutencao")
 }

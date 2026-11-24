@@ -243,6 +243,40 @@ export async function vincularItem(
   return { contratoItemId: item.id, contratoId: item.contratoId };
 }
 
+export async function solicitarAvaliacaoTecnica(usuario: AuthPayload, id: string) {
+  const chamado = await buscarPorId(usuario, id);
+  if (chamado.status !== 'PENDENTE_APROVACAO') throw new AppError('O chamado já saiu da triagem.', 422);
+
+  const atualizado = await prisma.$transaction(async (tx) => {
+    const transicao = await tx.manutencao.updateMany({
+      where: { id, status: 'PENDENTE_APROVACAO' },
+      data: { status: 'AGUARDANDO_AVALIACAO_TECNICA', decididoPorId: usuario.sub, informacoesSolicitadas: null },
+    });
+    if (!transicao.count) throw new AppError('O chamado já saiu da triagem. Atualize a página.', 409);
+    if (chamado.tipo === 'EQUIPAMENTO') {
+      const { equipamentoId, equipamento } = exigirEquipamento(chamado);
+      const podeReutilizarReserva = equipamento.status === 'EM_MANUTENCAO' && Boolean(chamado.informacoesSolicitadas);
+      if (!podeReutilizarReserva) {
+        const reserva = await tx.equipamento.updateMany({ where: { id: equipamentoId, status: 'ATIVO' }, data: { status: 'EM_MANUTENCAO' } });
+        if (!reserva.count) throw new AppError('O equipamento não está disponível para avaliação.', 422);
+        await tx.movimentacao.create({
+          data: {
+            equipamentoId, tipo: 'ENVIO_MANUTENCAO', descricao: 'Avaliação técnica solicitada',
+            unidadeOrigemId: chamado.unidadeId, usuarioId: usuario.sub,
+          },
+        });
+      }
+    }
+    await registrarAuditoria({
+      usuarioId: usuario.sub, acao: 'SOLICITAR_AVALIACAO_TECNICA', entidade: 'manutencao', entidadeId: id,
+      dadosAntes: { status: chamado.status }, dadosDepois: { status: 'AGUARDANDO_AVALIACAO_TECNICA' },
+    }, tx);
+    return tx.manutencao.findUniqueOrThrow({ where: { id }, include: includePadrao });
+  });
+  await avisos.avisoAvaliacaoTecnicaPendente(atualizado);
+  return atualizado;
+}
+
 export async function aprovar(usuario: AuthPayload, id: string, contratoItemId: string) {
   const manutencao = await buscarPorId(usuario, id);
   const civil = manutencao.tipo === 'CIVIL';
@@ -260,7 +294,7 @@ export async function aprovar(usuario: AuthPayload, id: string, contratoItemId: 
       servico?.servico?.exigeAvaliacaoTecnica === true || (civil && servico?.servico?.exigeOrcamentoPrevio === true);
     // Serviço que exige avaliação técnica: o item fica reservado, mas o chamado só vai ao prestador (contrato) depois do parecer
     const m = await tx.manutencao.update({
-      where: { id },
+      where: { id, status: 'PENDENTE_APROVACAO' },
       data: exigeAvaliacaoTecnica
         ? { status: 'AGUARDANDO_AVALIACAO_TECNICA', decididoPorId: usuario.sub, contratoItemId: vinculo.contratoItemId, informacoesSolicitadas: null }
         : { ...dadosDeEnvio(civil), decididoPorId: usuario.sub, informacoesSolicitadas: null, ...vinculo },
@@ -409,7 +443,6 @@ async function mudarSituacao(
 export async function devolverAvaliadoATriagem(usuario: AuthPayload, id: string, parecer: string) {
   const m = await buscarPorId(usuario, id);
   exigirEmAvaliacao(m);
-  if (!m.contratoItemId) throw new AppError('Escolha o item de contrato antes de devolver à triagem.', 422);
   const atualizada = await mudarSituacao(usuario, id, {
     de: 'AGUARDANDO_AVALIACAO_TECNICA',
     para: 'AVALIADO',
@@ -438,7 +471,7 @@ export async function solicitarInformacoes(usuario: AuthPayload, id: string, mot
 export async function marcarVistoria(usuario: AuthPayload, id: string) {
   const m = await buscarPorId(usuario, id);
   exigirEmAvaliacao(m);
-  return mudarSituacao(usuario, id, { de: 'AGUARDANDO_AVALIACAO_TECNICA', para: 'AGUARDANDO_VISTORIA', acao: 'MARCAR_VISTORIA', dados: {} });
+  return mudarSituacao(usuario, id, { de: 'AGUARDANDO_AVALIACAO_TECNICA', para: 'AGUARDANDO_VISTORIA', acao: 'MARCAR_VISTORIA', dados: { vistoriaAgendadaEm: null } });
 }
 
 // Depois da visita, o parecer é registrado e o chamado volta à avaliação, que decide de novo

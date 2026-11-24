@@ -470,13 +470,13 @@ export function AvaliacaoTecnica({
                 Encaminhar sem orçamento (risco à vida)
               </button>
             )}
-            <button type="button" className="btn btn-outline" disabled={ocupado || semMudanca || !edicao.itemEscolhido} onClick={() => executar(edicao.salvar)}>
+            <button type="button" className="btn btn-outline" disabled={ocupado || semMudanca} onClick={() => executar(edicao.salvar)}>
               Salvar e manter em análise
             </button>
             <button
               type="button"
               className="btn btn-outline"
-              disabled={ocupado || !parecerOk || !edicao.itemEscolhido || exigeOrcamento}
+              disabled={ocupado || !parecerOk || exigeOrcamento}
               onClick={() =>
                 executar(async () => {
                   if (!semMudanca) await edicao.salvar();

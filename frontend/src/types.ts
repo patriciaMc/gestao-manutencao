@@ -277,6 +277,7 @@ export interface Manutencao {
   cotacoes?: CotacaoOrcamento[];
   informacoesSolicitadas?: string | null;
   parecerVistoria?: string | null;
+  vistoriaAgendadaEm?: string | null;
   aguardandoRetornoEm?: string | null;
   resolvidoAutomaticamenteEm?: string | null;
   orcamentoValor: string | null;

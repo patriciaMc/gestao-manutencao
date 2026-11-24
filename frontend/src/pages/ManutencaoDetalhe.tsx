@@ -103,7 +103,7 @@ export function ManutencaoDetalhe() {
 // Status em que a triagem pode bloquear o chamado (igual ao backend)
 const STATUS_BLOQUEAVEIS: StatusManutencao[] = ['PENDENTE_APROVACAO', 'AGUARDANDO_AVALIACAO_TECNICA', 'AGUARDANDO_VISTORIA', 'AVALIADO', 'AGUARDANDO_ORCAMENTO', 'ORCAMENTO_REGISTRADO', 'AGUARDANDO_EXECUCAO'];
 
-type Acao = 'aprovar' | 'negar' | 'rejeitar' | 'orcamento' | 'finalizar' | 'retorno' | 'contestar' | 'ajustes' | 'reencaminhar' | 'decidir' | 'bloquear' | 'vistoria' | 'gerar-os' | 'executado' | 'recusar-os';
+type Acao = 'encaminhar-avaliado' | 'aprovar' | 'negar' | 'rejeitar' | 'orcamento' | 'finalizar' | 'retorno' | 'contestar' | 'ajustes' | 'reencaminhar' | 'decidir' | 'bloquear' | 'vistoria' | 'gerar-os' | 'executado' | 'recusar-os';
 
 function ConteudoManutencao({
   manutencao: m,
@@ -266,11 +266,12 @@ function ConteudoManutencao({
   const direta = (operacao: () => Promise<unknown>) => () => void executar(operacao);
 
   if (podeTriar && m.status === 'PENDENTE_APROVACAO') {
+    item('solicitar-avaliacao', 'Solicitar avaliação técnica', direta(() => api.post(`/manutencoes/${m.id}/solicitar-avaliacao`, {})));
     item('aprovar', 'Aprovar chamado', () => abrir('aprovar'));
     item('negar', 'Negar chamado', () => abrir('negar'));
   }
   if (podeTriar && m.status === 'AVALIADO') {
-    item('encaminhar-avaliado', 'Encaminhar ao prestador', direta(() => api.post(`/manutencoes/${m.id}/encaminhar-avaliado`, {})));
+    item('encaminhar-avaliado', 'Encaminhar ao prestador', m.contratoItem ? direta(() => api.post(`/manutencoes/${m.id}/encaminhar-avaliado`, {})) : () => abrir('encaminhar-avaliado'));
   }
   if (podeVistoriar && m.status === 'AGUARDANDO_VISTORIA') item('vistoria', 'Registrar vistoria', () => abrir('vistoria'));
   if (podeTriar && STATUS_BLOQUEAVEIS.includes(m.status)) item('bloquear', 'Bloquear chamado', () => abrir('bloquear'));
@@ -456,6 +457,18 @@ function ConteudoManutencao({
                           Confirmar negação
                         </button>
                       )}
+                    </div>
+                  </div>
+                )}
+
+                {podeTriar && acao === 'encaminhar-avaliado' && m.status === 'AVALIADO' && (
+                  <div className="actions-box">
+                    <div className="actions-title">Encaminhar ao prestador</div>
+                    {campoItemContrato}
+                    <div className="actions-row">
+                      <button type="button" className="btn btn-outline" onClick={fechar}>Cancelar</button>
+                      <button type="button" className="btn btn-primary" disabled={ocupado || !contratoItemId}
+                        onClick={() => executar(() => api.post(`/manutencoes/${m.id}/encaminhar-avaliado`, { contratoItemId }))}>Confirmar encaminhamento</button>
                     </div>
                   </div>
                 )}
@@ -699,6 +712,9 @@ function ConteudoManutencao({
                   <dd>{rotuloSimNao(m.confirmadoGestor)}</dd>
                 </div>
               </>
+            )}
+            {m.status === 'AGUARDANDO_VISTORIA' && m.vistoriaAgendadaEm && (
+              <div><dt>Visita agendada</dt><dd>{formatarDataHora(m.vistoriaAgendadaEm)}</dd></div>
             )}
             {m.dataConclusao && (
               <div>

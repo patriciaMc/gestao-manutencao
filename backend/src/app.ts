@@ -25,6 +25,8 @@ import { importacaoRouter } from './modules/importacao/importacao.routes';
 import { conversasRouter, criarMensagensRouter } from './modules/mensagens/mensagens.routes';
 import { relatosRouter } from './modules/relatos/relatos.routes';
 import { configuracoesRouter } from './modules/configuracoes/configuracoes.routes';
+import { avaliacaoTecnicaRouter } from './modules/avaliacao-tecnica/avaliacao-tecnica.routes';
+import { programacoesRouter } from './modules/programacoes/programacoes.routes';
 import { tratarErros } from './middlewares/error';
 import { prisma } from './lib/prisma';
 import { env } from './config/env';
@@ -85,6 +87,8 @@ export function criarApp() {
   app.use('/categorias', categoriasRouter);
   app.use('/equipamentos', equipamentosRouter);
   app.use('/manutencoes', manutencoesRouter);
+  app.use('/avaliacao-tecnica', avaliacaoTecnicaRouter);
+  app.use('/programacoes-manutencao', programacoesRouter);
   app.use('/configuracoes', configuracoesRouter);
   app.use('/relatos', relatosRouter);
   app.use('/conversas', conversasRouter);

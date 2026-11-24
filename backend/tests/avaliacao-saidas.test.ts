@@ -52,13 +52,15 @@ describe('Saídas da avaliação técnica', () => {
       expect(acaoAuditada()).toEqual(['DEVOLVER_AVALIADO_A_TRIAGEM']);
     });
 
-    it('exige parecer, item de contrato e a permissão de avaliar', async () => {
+    it('exige parecer e permissão de avaliar, e permite devolver sem item de contrato', async () => {
       prismaMock.manutencao.findUnique.mockResolvedValue(chamado());
       expect((await devolver(avaliador(), { parecer: '' })).status).toBe(422);
       expect((await devolver(triador())).status).toBe(403);
       prismaMock.manutencao.findUnique.mockResolvedValue(chamado({ contratoItemId: null }));
-      expect((await devolver()).status).toBe(422);
-      expect(prismaMock.manutencao.updateMany).not.toHaveBeenCalled();
+      gravar();
+      prismaMock.manutencao.findUniqueOrThrow.mockResolvedValue(chamado({ status: 'AVALIADO', contratoItemId: null }));
+      expect((await devolver()).status).toBe(200);
+      expect(ultimaGravacao().data).not.toHaveProperty('contratoItemId');
     });
 
     it('recusa quando a avaliação já mudou de situação (409)', async () => {

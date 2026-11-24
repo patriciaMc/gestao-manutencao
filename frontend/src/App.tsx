@@ -21,6 +21,8 @@ import { ContratoFormulario } from './pages/ContratoFormulario';
 import { MovimentacaoEstoque } from './pages/MovimentacaoEstoque';
 import { Conversas, ConversaPagina } from './pages/conversas/Conversas';
 import { Relatorios } from './pages/Relatorios';
+import { AvaliacaoTecnicaFila } from './pages/AvaliacaoTecnicaFila';
+import { CronogramaManutencao, NovaProgramacaoManutencao } from './pages/CronogramaManutencao';
 import { RotaRestrita } from './components/RotaRestrita';
 import { pode, type Permissao } from './utils/permissoes';
 import { Usuarios } from './pages/configuracoes/Usuarios';
@@ -101,6 +103,14 @@ function RotasProtegidas() {
           <Route path="/inventario/:id" element={<EquipamentoDetalhe />} />
           {/* A manutenção virou um tipo de solicitação: a lista e o formulário são os de Solicitações */}
           <Route path="/manutencoes" element={<Navigate to="/solicitacoes?tipo=MANUTENCAO" replace />} />
+          <Route path="/avaliacao-tecnica" element={<Restrita permissoes={['MANUTENCAO_CONSULTAR']}><Restrita permissoes={['MANUTENCAO_AVALIAR', 'MANUTENCAO_VISTORIAR']}><AvaliacaoTecnicaFila key="fila" visao="fila" /></Restrita></Restrita>} />
+          <Route path="/avaliacao-tecnica/agenda" element={<Restrita permissoes={['MANUTENCAO_CONSULTAR']}><Restrita permissoes={['MANUTENCAO_AVALIAR', 'MANUTENCAO_VISTORIAR']}><AvaliacaoTecnicaFila key="agenda" visao="agenda" /></Restrita></Restrita>} />
+          <Route path="/avaliacao-tecnica/pareceres" element={<Restrita permissoes={['MANUTENCAO_CONSULTAR']}><Restrita permissoes={['MANUTENCAO_AVALIAR', 'MANUTENCAO_VISTORIAR']}><AvaliacaoTecnicaFila key="pareceres" visao="pareceres" /></Restrita></Restrita>} />
+          <Route path="/programacoes" element={<Navigate to="/programacoes/preventivas" replace />} />
+          <Route path="/programacoes/preventivas" element={<Restrita permissoes={['MANUTENCAO_TRIAR']}><CronogramaManutencao key="preventiva" tipo="PREVENTIVA" /></Restrita>} />
+          <Route path="/programacoes/preventivas/nova" element={<Restrita permissoes={['MANUTENCAO_TRIAR']}><NovaProgramacaoManutencao key="preventiva" tipo="PREVENTIVA" /></Restrita>} />
+          <Route path="/programacoes/layout" element={<Restrita permissoes={['MANUTENCAO_TRIAR']}><CronogramaManutencao key="layout" tipo="ALTERACAO_LAYOUT" /></Restrita>} />
+          <Route path="/programacoes/layout/nova" element={<Restrita permissoes={['MANUTENCAO_TRIAR']}><NovaProgramacaoManutencao key="layout" tipo="ALTERACAO_LAYOUT" /></Restrita>} />
           <Route path="/manutencoes/nova" element={<NovaManutencaoRedireciona />} />
           <Route path="/manutencoes/:id" element={<ManutencaoDetalhe />} />
           <Route path="/solicitacoes" element={<Solicitacoes />} />

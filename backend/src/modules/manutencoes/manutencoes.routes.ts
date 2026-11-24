@@ -216,6 +216,10 @@ manutencoesRouter.post(
   },
 );
 
+manutencoesRouter.post('/:id/solicitar-avaliacao', permitirCom('MANUTENCAO_TRIAR'), async (req, res) => {
+  res.json(await service.solicitarAvaliacaoTecnica(req.usuario!, req.params.id));
+});
+
 // RN03 — somente o Administrador decide
 manutencoesRouter.post(
   '/:id/aprovar',

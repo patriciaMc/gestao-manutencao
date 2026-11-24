@@ -48,6 +48,10 @@ const TABS: TabDef[] = [
   { para: '/', rotulo: 'Início', icone: <IconeInicio />, perfis: ['OPERADOR', 'UNIDADE', 'GALPAO', 'TERCEIRIZADA', 'SEM_ACESSO'] },
   { para: '/inventario', rotulo: 'Inventário', icone: <IconeInventario />, perfis: ['OPERADOR', 'UNIDADE', 'GALPAO'] },
   { para: '/solicitacoes', rotulo: 'Solicitações', icone: <IconeSolicitacoes />, perfis: ['OPERADOR', 'UNIDADE', 'GALPAO', 'TERCEIRIZADA'], permissoes: ['SOLICITACOES_GERENCIAR', 'MANUTENCAO_CONSULTAR'] },
+  { para: '/avaliacao-tecnica', rotulo: 'Avaliação Técnica', icone: <IconeManutencoes />, perfis: ['OPERADOR'], permissoes: ['MANUTENCAO_AVALIAR', 'MANUTENCAO_VISTORIAR'],
+    sub: [{ para: '/avaliacao-tecnica/agenda', rotulo: 'Agenda de visitas' }, { para: '/avaliacao-tecnica/pareceres', rotulo: 'Anotações e pareceres' }] },
+  { para: '/programacoes', rotulo: 'Preventivas e layout', icone: <IconeManutencoes />, perfis: ['OPERADOR'], permissoes: ['MANUTENCAO_TRIAR'],
+    sub: [{ para: '/programacoes/preventivas', rotulo: 'Cronograma preventivas' }, { para: '/programacoes/layout', rotulo: 'Cronograma layout' }] },
   { para: '/estoque', rotulo: 'Estoque', icone: <IconeEstoque />, perfis: ['OPERADOR', 'GALPAO'], permissoes: ['ESTOQUE_GERENCIAR'] },
   { para: '/atas', rotulo: 'Atas', icone: <IconeAtas />, perfis: ['OPERADOR'], permissoes: ['ATAS_GERENCIAR'] },
   { para: '/contratos', rotulo: 'Contratos', icone: <IconeContratos />, perfis: ['OPERADOR', 'TERCEIRIZADA'], permissoes: ['CONTRATOS_GERENCIAR', 'MANUTENCAO_CONSULTAR'] },
@@ -119,7 +123,7 @@ export function Layout() {
 
   if (!usuario) return null;
 
-  const tabs = TABS.filter((t) => t.perfis.includes(usuario.perfil) && (!t.permissoes || usuario.perfil !== 'OPERADOR' || pode(usuario, ...t.permissoes)));
+  const tabs = TABS.filter((t) => (t.para !== '/avaliacao-tecnica' || pode(usuario, 'MANUTENCAO_CONSULTAR')) && t.perfis.includes(usuario.perfil) && (!t.permissoes || usuario.perfil !== 'OPERADOR' || pode(usuario, ...t.permissoes)));
   const secoesConfiguracoes = SECOES_CONFIGURACOES.filter((item) => pode(usuario, ...item.permissoes));
   const emConfiguracoes = location.pathname.startsWith('/configuracoes');
   const emConversas = location.pathname.startsWith('/conversas');
