@@ -8,21 +8,21 @@ import { StatusPill } from './StatusPill';
 type Linha = Pick<Manutencao, 'id' | 'numero' | 'titulo' | 'descricaoProblema' | 'status' | 'abertoPorContestacao' | 'criadoEm'>;
 interface Resultado { total: number; chamados: Linha[]; mesmaCategoria: boolean }
 
-export function HistoricoTriagem({ manutencao }: { manutencao: Manutencao }) {
+export function HistoricoTriagem({ caminho, unidade, categoria }: { caminho?: string; unidade?: string; categoria?: string }) {
   const { dados, carregando, falha } = useCarga(
     async () => {
-      const resultado = await api.get<Resultado>(`/manutencoes/${manutencao.id}/historico-triagem`);
+      const resultado = await api.get<Resultado>(caminho!);
       if (!Array.isArray(resultado?.chamados)) throw new Error('Resposta inválida.');
       return resultado;
     },
-    true,
+    Boolean(caminho),
     'Não foi possível carregar os chamados relacionados.',
   );
-  const categoria = manutencao.categoriaCivil?.nome ?? manutencao.equipamento?.tipoEquipamento?.categoria?.nome;
   return (
     <aside className="equipamento-secao manutencao-historico-lateral" aria-label="Histórico de chamados da unidade">
       <h3>Histórico de chamados da unidade</h3>
-      <p>{manutencao.unidade.nome}{dados?.mesmaCategoria && categoria ? ` · ${categoria}` : ''}</p>
+      {unidade && <p>{unidade}{categoria ? ` · ${categoria}` : ''}</p>}
+      {!caminho && <p>Selecione a unidade para consultar os chamados relacionados.</p>}
       {carregando && <p role="status">Buscando chamados…</p>}
       {falha && <p role="alert">Não foi possível carregar os chamados relacionados.</p>}
       {dados && (dados.total === 0 ? <p>Nenhum outro chamado encontrado.</p> : (

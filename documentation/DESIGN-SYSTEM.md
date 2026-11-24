@@ -11,7 +11,7 @@ Este documento registra a direção visual e as decisões de UX da plataforma. A
 5. **Sem símbolos decorativos:** botões e rótulos usam texto (nada de ícones em botões, setas ou "✕" em textos). Ícones ficam na navegação e em controles sem texto (ex.: fechar, expandir, **X de remover linha**). A única exceção é o "+" no início do texto das ações que **adicionam uma linha a uma lista** ("+ Adicionar item", "+ Adicionar pergunta", "+ Adicionar problema").
 6. **Acessibilidade por padrão:** foco visível, controles semânticos, nomes acessíveis e estados assíncronos anunciados (`role="alert"` / `role="status"`).
 
-Em Solicitações, as visualizações **Triagem Civil** e **Triagem Equipamentos** filtram os chamados da respectiva modalidade que aguardam decisão ou retornaram da avaliação técnica. No detalhe, o operador da triagem vê ao lado o histórico de chamados da mesma unidade e categoria. Os destaques operacionais ordenam a fila sem mudar a prioridade registrada no chamado.
+Em Solicitações, as visualizações **Triagem Civil** e **Triagem Equipamentos** filtram os chamados da respectiva modalidade que aguardam decisão ou retornaram da avaliação técnica. Na abertura e no detalhe, o histórico de chamados da mesma unidade e categoria fica à esquerda do conteúdo no desktop e acima dele em telas estreitas. Os destaques operacionais ordenam a fila sem mudar a prioridade registrada no chamado.
 
 ## Fundamentos
 

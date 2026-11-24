@@ -80,6 +80,19 @@ manutencoesRouter.get('/', leitura, async (req, res) => {
   res.json(manutencoes.map((m) => paraPerfil(req.usuario!.perfil, m)));
 });
 
+const consultaHistoricoTriagem = z.object({
+  tipo: z.enum(['CIVIL', 'EQUIPAMENTO']),
+  unidadeId: z.string().uuid().optional(),
+  categoriaId: z.string().uuid().optional(),
+});
+
+manutencoesRouter.get('/historico-triagem', permitirCom('MANUTENCAO_ESCREVER', Perfil.UNIDADE), async (req, res) => {
+  const consulta = consultaHistoricoTriagem.safeParse(req.query);
+  if (!consulta.success) throw new AppError('Dados de unidade ou categoria inválidos.', 422);
+  const { tipo, unidadeId, categoriaId } = consulta.data;
+  res.json(await service.historicoNovaTriagem(req.usuario!, tipo, unidadeId, categoriaId));
+});
+
 manutencoesRouter.get('/:id', leitura, async (req, res) => {
   res.json(paraPerfil(req.usuario!.perfil, await service.buscarPorId(req.usuario!, req.params.id)));
 });

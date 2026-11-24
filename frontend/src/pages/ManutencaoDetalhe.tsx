@@ -606,6 +606,7 @@ function ConteudoManutencao({
         </div>
 
       <div className={podeTriar ? "manutencao-com-historico" : undefined}>
+        {podeTriar && <HistoricoTriagem key={m.id} caminho={`/manutencoes/${m.id}/historico-triagem`} unidade={m.unidade.nome} categoria={m.categoriaCivil?.nome ?? m.equipamento?.tipoEquipamento?.categoria?.nome} />}
       <div className="solicitacao-layout">
         <section className="equipamento-secao solicitacao-informacoes">
           <h3>Informações da manutenção</h3>
@@ -823,7 +824,6 @@ function ConteudoManutencao({
           )}
         </HistoricoRecolhivel>
       </div>
-        {podeTriar && <HistoricoTriagem key={m.id} manutencao={m} />}
       </div>
     </section>
   );

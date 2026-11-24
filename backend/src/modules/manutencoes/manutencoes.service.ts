@@ -758,14 +758,22 @@ export async function historicoTriagem(usuario: AuthPayload, id: string) {
   const categoria = chamado.tipo === 'CIVIL'
     ? chamado.categoriaCivilId
     : categoriaEquipamento;
+  return consultarHistoricoTriagem(chamado.unidadeId, chamado.tipo, categoria ?? undefined, id);
+}
+
+export async function historicoNovaTriagem(usuario: AuthPayload, tipo: TipoManutencao, unidadePedida?: string, categoria?: string) {
+  const unidadeId = usuario.perfil === 'UNIDADE' ? usuario.unidadeId : unidadePedida;
+  if (!unidadeId) throw new AppError('Informe a unidade.', 422);
+  return consultarHistoricoTriagem(unidadeId, tipo, categoria);
+}
+
+async function consultarHistoricoTriagem(unidadeId: string, tipo: TipoManutencao, categoria?: string, excluirId?: string) {
   const onde: Prisma.ManutencaoWhereInput = {
-    id: { not: id },
-    unidadeId: chamado.unidadeId,
-    tipo: chamado.tipo,
-    ...(chamado.tipo === 'CIVIL' && categoria ? { categoriaCivilId: categoria } : {}),
-    ...(chamado.tipo === 'EQUIPAMENTO' && categoria
-      ? { equipamento: { tipoEquipamento: { categoriaId: categoria } } }
-      : {}),
+    ...(excluirId ? { id: { not: excluirId } } : {}),
+    unidadeId,
+    tipo,
+    ...(tipo === 'CIVIL' && categoria ? { categoriaCivilId: categoria } : {}),
+    ...(tipo === 'EQUIPAMENTO' && categoria ? { equipamento: { tipoEquipamento: { categoriaId: categoria } } } : {}),
   };
   const [total, chamados] = await prisma.$transaction([
     prisma.manutencao.count({ where: onde }),

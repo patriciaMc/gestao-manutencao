@@ -345,8 +345,8 @@ export function Solicitacoes() {
         </div>
         {podeCriar && (
           <div className="inventario-lista-acoes">
-            <Link to="/solicitacoes/nova" className="btn btn-primary">
-              Nova solicitação
+            <Link to={naTriagem ? `/solicitacoes/nova?tipo=MANUTENCAO&natureza=${tipoTriagem}` : "/solicitacoes/nova"} className="btn btn-primary">
+              {naTriagem ? (tipoTriagem === 'CIVIL' ? 'Nova triagem Civil' : 'Nova triagem Equipamentos') : 'Nova solicitação'}
             </Link>
           </div>
         )}

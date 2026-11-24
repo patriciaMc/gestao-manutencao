@@ -95,7 +95,7 @@
 
 .manutencao-com-historico {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  grid-template-columns: minmax(245px, 300px) minmax(0, 1fr);
   align-items: start;
   gap: 16px;
 }

@@ -11,8 +11,8 @@ export function mockFetch(rotas: Record<string, Resposta | ((init?: RequestInit)
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
       chamadas.push({ url, init });
-      const historicoTriagem = url.endsWith('/historico-triagem');
-      const chave = Object.keys(rotas).find((r) => (!historicoTriagem || r.endsWith('/historico-triagem')) && url.includes(r));
+      const historicoTriagem = url.split('?')[0].endsWith('/historico-triagem');
+      const chave = Object.keys(rotas).find((r) => (!historicoTriagem || r.split('?')[0].endsWith('/historico-triagem')) && url.includes(r));
       const def = chave ? rotas[chave] : undefined;
       // Home sempre pede pendências e atualizações; testes que não exercitam isso recebem lista vazia
       const padraoHome: Resposta | undefined =

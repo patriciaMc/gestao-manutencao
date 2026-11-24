@@ -374,6 +374,18 @@ describe('Manutenção civil', () => {
       expect((await request(app).get(caminho).set(unidade())).status).toBe(403);
     });
 
+    it('na abertura, limita o histórico ao vínculo da Unidade autenticada', async () => {
+      prismaMock.manutencao.findMany.mockResolvedValue([]);
+      const res = await request(app)
+        .get('/manutencoes/historico-triagem')
+        .query({ tipo: 'CIVIL', unidadeId: CAT, categoriaId: CAT })
+        .set(unidade());
+      expect(res.status).toBe(200);
+      expect(prismaMock.manutencao.findMany.mock.calls[0][0]?.where).toEqual({
+        tipo: 'CIVIL', unidadeId: 'unidade-1', categoriaCivilId: CAT,
+      });
+    });
+
     it('lista chamados parecidos em aberto da mesma unidade e tipo de problema', async () => {
       prismaMock.manutencao.findUnique.mockResolvedValue(civil() as never);
       prismaMock.manutencao.findMany.mockResolvedValue([] as never);

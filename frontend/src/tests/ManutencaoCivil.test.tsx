@@ -120,6 +120,12 @@ describe('Manutenção civil', () => {
   it('a unidade abre o chamado com local, tipo de problema e descrição, sem escolher equipamento', async () => {
     const chamadas = mockFetch({
       ...entrarComo('UNIDADE', '/solicitacoes/nova'),
+      '/manutencoes/historico-triagem?tipo=CIVIL&unidadeId=u1&categoriaId=cat-infiltracao': {
+        body: { total: 1, mesmaCategoria: true, chamados: [{
+          id: 'antigo', numero: 74, titulo: 'Infiltração anterior', descricaoProblema: 'Calha reparada',
+          status: 'CONCLUIDA', criadoEm: '2026-09-20T13:00:00.000Z',
+        }] },
+      },
       '/manutencoes/civil/abertos': { body: [] },
       '/manutencoes/civil': { body: civil() },
       '/categorias-civis': { body: categorias },
@@ -138,6 +144,8 @@ describe('Manutenção civil', () => {
     await userEvent.type(screen.getByLabelText('Título'), 'Infiltração na recepção');
     await userEvent.type(screen.getByLabelText('Local afetado *'), 'Recepção');
     await userEvent.selectOptions(await screen.findByLabelText('Tipo de problema *'), 'cat-infiltracao');
+    const relacionados = screen.getByRole('complementary', { name: 'Histórico de chamados da unidade' });
+    expect(await within(relacionados).findByRole('link', { name: 'MAN-0074 · Infiltração anterior' })).toBeInTheDocument();
     expect(enviar).toBeDisabled();
     await userEvent.type(screen.getByLabelText('Descrição do problema *'), 'Mancha de umidade no teto');
     // a pergunta obrigatória da categoria precisa de resposta; a opcional não
