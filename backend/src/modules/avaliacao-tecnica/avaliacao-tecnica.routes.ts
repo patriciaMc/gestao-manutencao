@@ -138,7 +138,9 @@ avaliacaoTecnicaRouter.post('/:id/anotacoes', validarBody(z.object({
 const atualizarAnotacao = z.object({
   compartilhada: z.boolean().optional(),
   arquivada: z.boolean().optional(),
-}).strict().refine((valores) => (valores.compartilhada === undefined) !== (valores.arquivada === undefined), {
+}).strict().refine(({ arquivada, compartilhada }) =>
+  (arquivada === true && compartilhada === true) ||
+  (compartilhada === undefined) !== (arquivada === undefined), {
   message: 'Escolha uma ação para a anotação.',
 });
 
@@ -148,9 +150,14 @@ avaliacaoTecnicaRouter.patch('/:id/anotacoes/:notaId', validarBody(atualizarAnot
     const where = { id: req.params.notaId, manutencaoId: req.params.id, autorId: req.usuario!.sub };
     const registro = await tx.anotacaoTecnica.findFirst({ where, select: selecaoAnotacao });
     if (!registro) throw new AppError('Anotação não encontrada.', 404);
-    if (compartilhada !== undefined && registro.arquivadaEm) throw new AppError('Desarquive a anotação para alterar o compartilhamento.', 409);
-    if (compartilhada === registro.compartilhada || arquivada === Boolean(registro.arquivadaEm)) return registro;
-    const dados = arquivada === undefined ? { compartilhada } : { arquivadaEm: arquivada ? new Date() : null };
+    if (arquivada === undefined && registro.arquivadaEm) throw new AppError('Desarquive a anotação para alterar o compartilhamento.', 409);
+    const mudarArquivo = arquivada !== undefined && arquivada !== Boolean(registro.arquivadaEm);
+    const mudarCompartilhamento = compartilhada !== undefined && compartilhada !== registro.compartilhada;
+    if (!mudarArquivo && !mudarCompartilhamento) return registro;
+    const dados = {
+      ...(mudarArquivo ? { arquivadaEm: arquivada ? new Date() : null } : {}),
+      ...(mudarCompartilhamento ? { compartilhada } : {}),
+    };
     const alteracao = await tx.anotacaoTecnica.updateMany({
       where: { ...where, arquivadaEm: registro.arquivadaEm, compartilhada: registro.compartilhada }, data: dados,
     });

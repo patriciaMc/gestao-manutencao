@@ -99,6 +99,40 @@ describe('Avaliação, agenda e programação de manutenção', () => {
     expect(prismaMock.anotacaoTecnica.updateMany.mock.calls[1][0].where).toMatchObject({ autorId: 'user-1', arquivadaEm });
   });
 
+  it('arquiva no histórico e só retorna o texto aos perfis internos autorizados', async () => {
+    const caminho = `/avaliacao-tecnica/${chamadoId}/anotacoes/nota-1`;
+    const nota = { id: 'nota-1', texto: 'Inspeção interna', compartilhada: false, arquivadaEm: null };
+    prismaMock.anotacaoTecnica.findFirst.mockResolvedValue(nota as never);
+    prismaMock.anotacaoTecnica.updateMany.mockResolvedValue({ count: 1 });
+    const arquivamento = await request(app).patch(caminho).set(tecnico).send({ arquivada: true, compartilhada: true });
+    expect(arquivamento.status).toBe(200);
+    expect(arquivamento.body).toMatchObject({ compartilhada: true, arquivadaEm: expect.any(String) });
+
+    const criadoEm = new Date('2026-11-24T18:00:00Z');
+    prismaMock.manutencao.findUnique.mockResolvedValue({ id: chamadoId, tipo: 'CIVIL', unidadeId, criadoEm } as never);
+    prismaMock.logAuditoria.findMany.mockResolvedValue([{
+      id: 'interno', acao: 'ARQUIVAR_ANOTACAO_TECNICA', criadoEm,
+    } as never]);
+    prismaMock.anotacaoTecnica.findMany.mockResolvedValue([{
+      ...nota, arquivadaEm: criadoEm, autor: { nome: 'Equipe técnica' },
+    } as never]);
+    const historico = `/manutencoes/${chamadoId}/historico`;
+    const leitura = await request(app).get(historico).set(auth('OPERADOR', {
+      permissoes: ['MANUTENCAO_CONSULTAR', 'MANUTENCAO_TRIAR'],
+    }));
+    expect(leitura.status).toBe(200);
+    expect(leitura.body).toContainEqual(expect.objectContaining({ textoAnotacao: nota.texto }));
+    expect(prismaMock.anotacaoTecnica.findMany.mock.calls[0][0]?.where).toEqual({
+      manutencaoId: chamadoId, compartilhada: true, arquivadaEm: { not: null },
+    });
+    const consultaGeral = await request(app).get(historico).set(auth('OPERADOR', {
+      permissoes: ['MANUTENCAO_CONSULTAR'],
+    }));
+    expect(consultaGeral.status).toBe(200);
+    expect(consultaGeral.body.map((evento: { id: string }) => evento.id)).toEqual(['abertura']);
+    expect(prismaMock.anotacaoTecnica.findMany).toHaveBeenCalledTimes(1);
+  });
+
   it('filtra visitas agendadas no dia escolhido', async () => {
     prismaMock.manutencao.findMany.mockResolvedValue([]);
     const res = await request(app).get('/avaliacao-tecnica').set(tecnico).query({

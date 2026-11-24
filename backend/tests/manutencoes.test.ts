@@ -499,6 +499,7 @@ describe('Histórico e auditoria da manutenção', () => {
       { id: 'l1', acao: 'CONFIRMAR_RETORNO_MANUTENCAO', criadoEm: abertura, dadosDepois: { perfil: 'GESTOR_MANUTENCAO' }, usuario: { nome: 'Carla' } },
       { id: 'l2', acao: 'CONFIRMAR_RETORNO_MANUTENCAO', criadoEm: abertura, dadosDepois: { perfil: 'UNIDADE' }, usuario: { nome: 'Rodrigo' } },
     ] as never);
+    prismaMock.anotacaoTecnica.findMany.mockResolvedValue([]);
     const res = await request(app).get('/manutencoes/man-1/historico').set(auth('OPERADOR'));
     expect(res.body[1].perfil).toBe('OPERADOR');
     expect(res.body[2].perfil).toBe('UNIDADE');
@@ -523,6 +524,7 @@ describe('Histórico e auditoria da manutenção', () => {
       },
     ] as never);
 
+    prismaMock.anotacaoTecnica.findMany.mockResolvedValue([]);
     const res = await request(app).get('/manutencoes/man-1/historico').set(auth('OPERADOR'));
 
     expect(res.status).toBe(200);

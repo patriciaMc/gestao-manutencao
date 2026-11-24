@@ -850,11 +850,12 @@ function ConteudoManutencao({
               {historico.map((evento) => (
                 <li className="equipamento-evento" key={evento.id}>
                   <div>
-                    <strong>{rotuloEventoManutencao(evento, m.tipo)}</strong>
+                    <strong>{evento.textoAnotacao ? 'Anotação técnica arquivada · acesso restrito' : rotuloEventoManutencao(evento, m.tipo)}</strong>
                     <p>
                       {evento.usuario ? `${evento.usuario} · ` : ''}
                       <time dateTime={evento.criadoEm}>{formatarDataHora(evento.criadoEm)}</time>
                     </p>
+                    {evento.textoAnotacao && <p className="historico-anotacao-texto">{evento.textoAnotacao}</p>}
                   </div>
                 </li>
               ))}

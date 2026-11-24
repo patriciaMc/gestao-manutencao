@@ -119,8 +119,17 @@ export async function buscarPorId(usuario: AuthPayload, id: string) {
   return manutencao;
 }
 
+const permissoesHistoricoTecnico = [
+  'MANUTENCAO_TRIAR', 'MANUTENCAO_AVALIAR', 'MANUTENCAO_VISTORIAR',
+  'MANUTENCAO_FISCALIZAR', 'CONFIGURACOES_GERENCIAR',
+] as const;
+const acoesAnotacaoInterna = new Set([
+  'REGISTRAR_ANOTACAO_TECNICA', 'ARQUIVAR_ANOTACAO_TECNICA', 'DESARQUIVAR_ANOTACAO_TECNICA',
+  'COMPARTILHAR_ANOTACAO_TECNICA', 'PRIVAR_ANOTACAO_TECNICA',
+]);
+
 // Linha do tempo da manutenção: abertura + ações auditadas. Expõe só ação,
-// autor, data e o perfil de quem confirmou o retorno — nunca o payload bruto.
+// autor, data e perfil. Anotações internas são consultadas com visibilidade própria.
 export async function historico(usuario: AuthPayload, id: string) {
   const manutencao = await buscarPorId(usuario, id);
   const logs = await prisma.logAuditoria.findMany({
@@ -134,9 +143,36 @@ export async function historico(usuario: AuthPayload, id: string) {
       usuario: { select: { nome: true } },
     },
   });
+  const podeVerAnotacoes = usuario.perfil === 'OPERADOR'
+    && permissoesHistoricoTecnico.some((permissao) => usuario.permissoes.includes(permissao));
+  const anotacoes = podeVerAnotacoes ? await prisma.anotacaoTecnica.findMany({
+    where: { manutencaoId: id, compartilhada: true, arquivadaEm: { not: null } },
+    select: { id: true, texto: true, arquivadaEm: true, autor: { select: { nome: true } } },
+  }) : [];
   // Abertura sintética (equipamento não grava auditoria na solicitação). No civil a auditoria
   // ABRIR_MANUTENCAO_CIVIL já existe — a sintética usa a mesma ação e o log duplicado é omitido.
   const acaoAbertura = manutencao.tipo === 'CIVIL' ? 'ABRIR_MANUTENCAO_CIVIL' : 'ABRIR_MANUTENCAO';
+  const eventosAuditoria = logs
+    .filter((log) => log.acao !== acaoAbertura && !acoesAnotacaoInterna.has(log.acao))
+    .map((log) => {
+      const dados = (log.dadosDepois ?? {}) as { perfil?: unknown };
+      return {
+        id: log.id,
+        acao: log.acao,
+        criadoEm: log.criadoEm,
+        usuario: log.usuario?.nome ?? null,
+        // Registros antigos guardam os perfis que foram unificados em Administrador
+        ...(typeof dados.perfil === 'string' ? { perfil: PERFIS_UNIFICADOS.includes(dados.perfil) ? 'OPERADOR' : dados.perfil } : {}),
+      };
+    });
+  const eventosAnotacao = anotacoes.flatMap((nota) => nota.arquivadaEm ? [{
+    id: `anotacao-${nota.id}`,
+    acao: 'ANOTACAO_TECNICA_ARQUIVADA',
+    criadoEm: nota.arquivadaEm,
+    usuario: nota.autor.nome,
+    textoAnotacao: nota.texto,
+  }] : []);
+  const eventos = [...eventosAuditoria, ...eventosAnotacao].sort((a, b) => a.criadoEm.getTime() - b.criadoEm.getTime());
   return [
     {
       id: 'abertura',
@@ -144,19 +180,7 @@ export async function historico(usuario: AuthPayload, id: string) {
       criadoEm: manutencao.criadoEm,
       usuario: manutencao.solicitante?.nome ?? null,
     },
-    ...logs
-      .filter((log) => log.acao !== acaoAbertura)
-      .map((log) => {
-        const dados = (log.dadosDepois ?? {}) as { perfil?: unknown };
-        return {
-          id: log.id,
-          acao: log.acao,
-          criadoEm: log.criadoEm,
-          usuario: log.usuario?.nome ?? null,
-          // Registros antigos guardam os perfis que foram unificados em Administrador
-          ...(typeof dados.perfil === 'string' ? { perfil: PERFIS_UNIFICADOS.includes(dados.perfil) ? 'OPERADOR' : dados.perfil } : {}),
-        };
-      }),
+    ...eventos,
   ];
 }
 

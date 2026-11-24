@@ -58,6 +58,7 @@ function Agendamento({ chamado, aoGravar }: { chamado: Chamado; aoGravar: () => 
 function Anotacoes({ chamado }: { chamado: Chamado }) {
   const [arquivadas, setArquivadas] = useState(false);
   return <div className="planejamento-notas">
+    <p>O histórico restrito é visível à triagem e aos perfis internos autorizados.</p>
     <div className="actions-row" role="group" aria-label="Exibição de anotações">
       <button className="btn btn-outline" type="button" aria-pressed={!arquivadas} onClick={() => setArquivadas(false)}>Ativas</button>
       <button className="btn btn-outline" type="button" aria-pressed={arquivadas} onClick={() => setArquivadas(true)}>Arquivadas</button>
@@ -91,7 +92,7 @@ function ListaAnotacoes({ chamado, arquivadas }: { chamado: Chamado; arquivadas:
       setGravando(false);
     }
   }
-  async function alterarAnotacao(nota: Anotacao, acao: { compartilhada: boolean } | { arquivada: boolean }) {
+  async function alterarAnotacao(nota: Anotacao, acao: { compartilhada: boolean } | { arquivada: boolean; compartilhada?: true }) {
     if (gravando) return;
     setGravando(true);
     setErro('');
@@ -110,11 +111,15 @@ function ListaAnotacoes({ chamado, arquivadas }: { chamado: Chamado; arquivadas:
     {carregando && <p role="status">Carregando anotações…</p>}
     {falha && <p role="alert">{falha}</p>}
     {registros.length > 0 ? <ul>{registros.map((nota) => <li key={nota.id}><strong>{nota.autor.nome}</strong>
-      <span> · {formatarDataHora(nota.criadoEm)} · {arquivadas ? 'Arquivada' : nota.compartilhada ? 'Compartilhada com a equipe' : 'Privada'}</span>
+      <span> · {formatarDataHora(nota.criadoEm)} · {arquivadas ? (nota.compartilhada ? 'No histórico restrito do chamado' : 'Arquivada em privado') : nota.compartilhada ? 'Compartilhada com a equipe' : 'Privada'}</span>
       <p>{nota.texto}</p>
       {nota.autor.id === usuario?.id && <div className="planejamento-nota-acoes">
-        <button className="btn btn-outline" type="button" disabled={gravando}
-          onClick={() => void alterarAnotacao(nota, { arquivada: !arquivadas })}>{arquivadas ? 'Desarquivar' : 'Arquivar'}</button>
+        {(!arquivadas || !nota.compartilhada) && <button className="btn btn-outline" type="button" disabled={gravando}
+          onClick={() => void alterarAnotacao(nota, { arquivada: true, compartilhada: true })}>
+          {arquivadas ? 'Incluir no histórico restrito' : 'Arquivar no histórico do chamado'}
+        </button>}
+        {(arquivadas || !nota.compartilhada) && <button className="btn btn-outline" type="button" disabled={gravando}
+          onClick={() => void alterarAnotacao(nota, { arquivada: !arquivadas })}>{arquivadas ? 'Desarquivar' : 'Arquivar em privado'}</button>}
         {!arquivadas && <button className="btn btn-outline" type="button" disabled={gravando}
           onClick={() => void alterarAnotacao(nota, { compartilhada: !nota.compartilhada })}>{nota.compartilhada ? 'Tornar privada' : 'Compartilhar com a equipe'}</button>}
       </div>}

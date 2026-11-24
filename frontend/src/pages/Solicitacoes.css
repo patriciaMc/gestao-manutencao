@@ -163,3 +163,8 @@
 .chamados-nova-demanda a { color: #005bd3; font-size: 13px; }
 .chamados-tipo-detalhe { display: block; color: var(--text-secondary); margin-top: 3px; }
 .chamados-filtros { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+
+.historico-anotacao-texto {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

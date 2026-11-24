@@ -17,7 +17,7 @@ O **Painel de chamados** acompanha a unidade, a categoria, o tipo de serviço, o
 
 Na triagem Civil, **Pedir avaliação técnica** e **Encaminhar ao prestador** ficam no cabeçalho do chamado. Para encaminhar, selecione o item do contrato e a prioridade. Baixa é programada, Média tem 48 horas e Crítica tem 2 horas. O prazo começa quando a execução é liberada ao prestador.
 
-**Avaliação Técnica** abre a fila de chamados enviados pela triagem. Os submenus **Agenda de visitas** e **Anotações e pareceres** mantêm o número MAN e levam ao detalhe original do chamado. A agenda filtra data e situação e registra o responsável pela visita. As anotações são pessoais até que o autor as compartilhe com a equipe técnica. Anotações arquivadas ficam na aba do autor e recuperam a visibilidade anterior ao serem desarquivadas. **Preventivas e layout** agrupa dois cronogramas independentes, com cadastro em página própria.
+**Avaliação Técnica** abre a fila de chamados enviados pela triagem. Os submenus **Agenda de visitas** e **Anotações e pareceres** mantêm o número MAN e levam ao detalhe original do chamado. A agenda filtra data e situação e registra o responsável pela visita. As anotações são pessoais até que o autor as compartilhe com a equipe técnica. O autor pode arquivar uma anotação em privado ou incluí-la no **Histórico do chamado**. As anotações incluídas no histórico são visíveis à triagem, avaliação, vistoria, fiscalização e aos operadores com permissão de gerenciar configurações, desde que possam consultar manutenções. Desarquivar retira a anotação do histórico e conserva a escolha de compartilhamento. **Preventivas e layout** agrupa dois cronogramas independentes, com cadastro em página própria.
 
 ## Fundamentos
 

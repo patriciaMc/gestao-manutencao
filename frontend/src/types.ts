@@ -226,6 +226,7 @@ export interface EtapaDoCaso {
 }
 
 export interface EventoManutencao {
+  textoAnotacao?: string;
   id: string;
   acao: string;
   criadoEm: string;
