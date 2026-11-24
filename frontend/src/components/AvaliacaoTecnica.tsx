@@ -1,7 +1,8 @@
 import { type ReactNode, useEffect, useState } from 'react';
 import { api } from '../api/client';
 import type { EdicaoAvaliacao } from '../hooks/useEdicaoAvaliacao';
-import type { ItemSinapi, Manutencao } from '../types';
+import { CampoPrioridadeCivil } from './PrioridadeCivil';
+import type { ItemSinapi, Manutencao, PrioridadeCivil } from '../types';
 import { formatarMoeda } from '../utils/format';
 import { nomeEquipamento } from '../utils/manutencao';
 import { useCategoriasCivis } from '../hooks/useCategoriasCivis';
@@ -213,6 +214,7 @@ export function AvaliacaoTecnica({
 }) {
   const { ativo, form, campo, semMudanca } = edicao;
   const civil = m.tipo === 'CIVIL';
+  const [prioridadeCivil, setPrioridadeCivil] = useState<PrioridadeCivil | ''>(m.prioridadeCivil ?? 'MEDIA');
   const [destino, setDestino] = useState<Destino>(null);
   const [tipoEncerramento, setTipoEncerramento] = useState('ENCERRADO');
   const [motivo, setMotivo] = useState('');
@@ -385,6 +387,8 @@ export function AvaliacaoTecnica({
         </div>
       )}
 
+      {civil && (destino === null || destino === 'orcamento' || destino === 'dispensa') &&
+        <CampoPrioridadeCivil id="avaliacao-prioridade" valor={prioridadeCivil} onChange={setPrioridadeCivil} />}
       {exigeOrcamento && !destino && (
         <p className="itens-aviso" role="status">
           Este serviço exige orçamento prévio: solicite o orçamento ao prestador. Só em risco à vida o chamado segue sem ele.
@@ -400,13 +404,13 @@ export function AvaliacaoTecnica({
             <button
               type="button"
               className="btn btn-primary"
-              disabled={ocupado || motivo.trim().length < (destino === 'dispensa' ? 10 : 3)}
+              disabled={ocupado || !prioridadeCivil || motivo.trim().length < (destino === 'dispensa' ? 10 : 3)}
               onClick={() =>
                 executar(async () => {
                   if (!semMudanca) await edicao.salvar();
                   await (destino === 'orcamento'
-                    ? api.post(`/manutencoes/${m.id}/solicitar-orcamento`, { instrucoes: motivo.trim() })
-                    : api.post(`/manutencoes/${m.id}/dispensar-orcamento`, { justificativa: motivo.trim() }));
+                    ? api.post(`/manutencoes/${m.id}/solicitar-orcamento`, { instrucoes: motivo.trim(), prioridadeCivil })
+                    : api.post(`/manutencoes/${m.id}/dispensar-orcamento`, { justificativa: motivo.trim(), prioridadeCivil }));
                 })
               }
             >
@@ -489,11 +493,11 @@ export function AvaliacaoTecnica({
             <button
               type="button"
               className="btn btn-primary"
-              disabled={ocupado || !parecerOk || !edicao.itemEscolhido || exigeOrcamento}
+              disabled={ocupado || !parecerOk || !edicao.itemEscolhido || exigeOrcamento || (civil && !prioridadeCivil)}
               onClick={() =>
                 executar(async () => {
                   if (!semMudanca) await edicao.salvar();
-                  await api.post(`/manutencoes/${m.id}/concluir-avaliacao`, { parecer: form.parecerTecnico.trim() });
+                  await api.post(`/manutencoes/${m.id}/concluir-avaliacao`, { parecer: form.parecerTecnico.trim(), ...(civil && { prioridadeCivil }) });
                 })
               }
             >

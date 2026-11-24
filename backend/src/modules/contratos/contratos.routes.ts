@@ -27,7 +27,7 @@ const selecaoItens = {
     servicoId: true,
     valor: true,
     descontoPercentual: true,
-    servico: { select: { id: true, nome: true } },
+    servico: { select: { id: true, nome: true, exigeAvaliacaoTecnica: true, exigeOrcamentoPrevio: true } },
   },
 } satisfies Prisma.Contrato$itensArgs;
 

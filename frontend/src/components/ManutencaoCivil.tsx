@@ -1,3 +1,5 @@
+import { CampoPrioridadeCivil } from './PrioridadeCivil';
+import type { PrioridadeCivil } from '../types';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
@@ -267,19 +269,24 @@ export function AcoesCivil({
   fechar: () => void;
 }) {
   const [motivo, setMotivo] = useState('');
+  const prioridadeRegistrada = m.prioridadeCivil ?? '';
+  const [prioridadeCivil, setPrioridadeCivil] = useState<PrioridadeCivil | ''>(prioridadeRegistrada);
   const [contratoItemId, setContratoItemId] = useState('');
   const [contratos, setContratos] = useState<Contrato[]>([]);
   const [parecidos, setParecidos] = useState<ChamadoParecido[]>([]);
   const [falhaApoio, setFalhaApoio] = useState<string | null>(null);
 
-  const emTriagem = podeTriar && m.status === 'PENDENTE_APROVACAO' && (painel === 'aprovar' || painel === 'negar');
-  const modo = painel === 'aprovar' ? 'encaminhar' : 'negar';
+  const encaminharAvaliado = podeTriar && m.status === 'AVALIADO' && painel === 'encaminhar-avaliado';
+  const emTriagem = encaminharAvaliado || (podeTriar && m.status === 'PENDENTE_APROVACAO' && (painel === 'aprovar' || painel === 'negar'));
+  const modo = painel === 'negar' ? 'negar' : 'encaminhar';
+  const itemAnterior = encaminharAvaliado ? m.contratoItem?.id ?? '' : '';
 
   // Ao mudar de etapa ou de painel, os formulários voltam ao início
   useEffect(() => {
     setMotivo('');
-    setContratoItemId('');
-  }, [m.status, painel]);
+    setContratoItemId(itemAnterior);
+    setPrioridadeCivil(prioridadeRegistrada);
+  }, [m.status, painel, itemAnterior, prioridadeRegistrada]);
 
   useEffect(() => {
     if (!emTriagem) return;
@@ -301,6 +308,8 @@ export function AcoesCivil({
   // Itens elegíveis: contrato vigente. O saldo aparece como informação, mas não bloqueia a escolha
   const contratosElegiveis = contratos.filter((c) => c.status !== 'EXPIRADO' && c.itens.length > 0);
 
+  const itemSelecionado = contratosElegiveis.flatMap((contrato) => contrato.itens).find((item) => item.id === contratoItemId);
+  const exigeAvaliacao = !encaminharAvaliado && (itemSelecionado?.servico.exigeAvaliacaoTecnica || itemSelecionado?.servico.exigeOrcamentoPrevio);
   const campoItem = (
     <div className="field">
       <label htmlFor="civil-item-contrato">Item do contrato *</label>
@@ -356,7 +365,7 @@ export function AcoesCivil({
       {/* Triagem do Administrador: conferir cobertura, duplicidade e disponibilidade antes de aprovar */}
       {emTriagem && (
         <div className="actions-box">
-          <div className="actions-title">{modo === 'encaminhar' ? 'Aprovar chamado' : 'Negar chamado'}</div>
+          <div className="actions-title">{modo === 'encaminhar' ? 'Encaminhar ao prestador' : 'Negar chamado'}</div>
           {parecidos.length > 0 && (
             <section className="civil-parecidos" role="status" aria-labelledby="civil-parecidos-titulo">
               <h4 id="civil-parecidos-titulo">
@@ -388,7 +397,11 @@ export function AcoesCivil({
             Confira se o serviço é manutenção (e não alteração de estrutura ou layout, que pode ter outra cobertura) e se
             tem contrato vigente.
           </p>
-          {modo === 'encaminhar' ? campoItem : campoMotivo('Motivo da negação')}
+          {modo === 'encaminhar' ? <>
+            {campoItem}
+            <CampoPrioridadeCivil id="civil-prioridade" valor={prioridadeCivil} onChange={setPrioridadeCivil} />
+            {exigeAvaliacao && <p className="itens-aviso" role="status">Este serviço exige avaliação técnica antes da liberação. O prazo começa quando o prestador for liberado para executar.</p>}
+          </> : campoMotivo('Motivo da negação')}
           <div className="actions-row">
             <button type="button" className="btn btn-outline" onClick={fechar}>
               Cancelar
@@ -396,16 +409,16 @@ export function AcoesCivil({
             <button
               type="button"
               className="btn btn-primary"
-              disabled={ocupado || (modo === 'encaminhar' ? !contratoItemId : !motivo.trim())}
+              disabled={ocupado || (modo === 'encaminhar' ? (!contratoItemId || !prioridadeCivil) : !motivo.trim())}
               onClick={() =>
                 executar(() =>
                   modo === 'encaminhar'
-                    ? api.post(`/manutencoes/${m.id}/aprovar`, { contratoItemId })
+                    ? api.post(`/manutencoes/${m.id}/${encaminharAvaliado ? 'encaminhar-avaliado' : 'aprovar'}`, { contratoItemId, prioridadeCivil })
                     : api.post(`/manutencoes/${m.id}/negar`, { motivo }),
                 )
               }
             >
-              {modo === 'encaminhar' ? 'Confirmar aprovação' : 'Confirmar negação'}
+              {modo === 'encaminhar' ? (exigeAvaliacao ? 'Enviar para avaliação' : 'Confirmar encaminhamento') : 'Confirmar negação'}
             </button>
           </div>
         </div>

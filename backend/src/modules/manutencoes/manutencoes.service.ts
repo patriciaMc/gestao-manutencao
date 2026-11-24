@@ -2,6 +2,7 @@ import { comprometidoPorItem, saldoDoItem } from '../contratos/saldo';
 import {
   EstadoConservacao,
   Prisma,
+  PrioridadeCivil,
   StatusManutencao,
   TipoEncerramento,
   TipoManutencao,
@@ -13,6 +14,8 @@ import { registrarAuditoria } from '../../services/auditoria.service';
 import { notificar } from '../../services/notificacao.service';
 import * as avisos from '../../services/avisos.eventos';
 import { AuthPayload } from '../../middlewares/auth';
+
+import { iniciarSlaCivil } from './sla-civil';
 
 export const includePadrao = {
   equipamento: {
@@ -277,7 +280,7 @@ export async function solicitarAvaliacaoTecnica(usuario: AuthPayload, id: string
   return atualizado;
 }
 
-export async function aprovar(usuario: AuthPayload, id: string, contratoItemId: string) {
+export async function aprovar(usuario: AuthPayload, id: string, contratoItemId: string, prioridadeCivil?: PrioridadeCivil) {
   const manutencao = await buscarPorId(usuario, id);
   const civil = manutencao.tipo === 'CIVIL';
   if (manutencao.status !== 'PENDENTE_APROVACAO') {
@@ -293,11 +296,13 @@ export async function aprovar(usuario: AuthPayload, id: string, contratoItemId: 
     const exigeAvaliacaoTecnica =
       servico?.servico?.exigeAvaliacaoTecnica === true || (civil && servico?.servico?.exigeOrcamentoPrevio === true);
     // Serviço que exige avaliação técnica: o item fica reservado, mas o chamado só vai ao prestador (contrato) depois do parecer
+    const envio = dadosDeEnvio(civil);
+    const prioridade = civil && prioridadeCivil ? { prioridadeCivil } : {};
     const m = await tx.manutencao.update({
       where: { id, status: 'PENDENTE_APROVACAO' },
       data: exigeAvaliacaoTecnica
-        ? { status: 'AGUARDANDO_AVALIACAO_TECNICA', decididoPorId: usuario.sub, contratoItemId: vinculo.contratoItemId, informacoesSolicitadas: null }
-        : { ...dadosDeEnvio(civil), decididoPorId: usuario.sub, informacoesSolicitadas: null, ...vinculo },
+        ? { status: 'AGUARDANDO_AVALIACAO_TECNICA', decididoPorId: usuario.sub, contratoItemId: vinculo.contratoItemId, informacoesSolicitadas: null, ...prioridade }
+        : { ...envio, ...iniciarSlaCivil(manutencao, envio.dataEnvio, prioridadeCivil), decididoPorId: usuario.sub, informacoesSolicitadas: null, ...vinculo },
       include: includePadrao,
     });
     if (!civil) {
@@ -327,7 +332,7 @@ export async function aprovar(usuario: AuthPayload, id: string, contratoItemId: 
         entidade: 'manutencao',
         entidadeId: id,
         dadosAntes: { status: manutencao.status },
-        dadosDepois: { status: m.status, ...(civil ? { contratoId: vinculo.contratoId } : {}) },
+        dadosDepois: { status: m.status, ...(civil ? { contratoId: vinculo.contratoId, ...prioridade } : {}) },
       },
       tx,
     );
@@ -367,7 +372,7 @@ async function notificarEnvio(m: ManutencaoCarregada, civil: boolean) {
 export async function encaminharAoPrestador(
   usuario: AuthPayload,
   id: string,
-  { de, acao, parecer, contratoItemId, dispensaOrcamento }: { de: StatusManutencao; acao: string; parecer?: string; contratoItemId?: string; dispensaOrcamento?: string },
+  { de, acao, parecer, contratoItemId, dispensaOrcamento, prioridadeCivil }: { de: StatusManutencao; acao: string; parecer?: string; contratoItemId?: string; dispensaOrcamento?: string; prioridadeCivil?: PrioridadeCivil },
 ) {
   const manutencao = await buscarPorId(usuario, id);
   const itemId = contratoItemId ?? manutencao.contratoItemId;
@@ -389,9 +394,10 @@ export async function encaminharAoPrestador(
       }
     }
     const { contratoItemId: item, contratoId } = await vincularItem(tx, itemId, id, { novaSelecao: itemId !== manutencao.contratoItemId });
+    const envio = dadosDeEnvio(civil);
     const gravado = await tx.manutencao.updateMany({
       where: { id, status: de },
-      data: { ...dadosDeEnvio(civil), contratoItemId: item, contratoId, ...(parecer ? { parecerTecnico: parecer } : {}), ...(dispensaOrcamento ? { dispensaOrcamentoMotivo: dispensaOrcamento } : {}) },
+      data: { ...envio, ...iniciarSlaCivil(manutencao, envio.dataEnvio, prioridadeCivil), contratoItemId: item, contratoId, ...(parecer ? { parecerTecnico: parecer } : {}), ...(dispensaOrcamento ? { dispensaOrcamentoMotivo: dispensaOrcamento } : {}) },
     });
     if (gravado.count === 0) throw new AppError('Este chamado já mudou de situação. Atualize a página.', 409);
     const m = await tx.manutencao.findUnique({ where: { id }, include: includePadrao });
@@ -414,12 +420,12 @@ export async function encaminharAoPrestador(
 }
 
 // Avaliação técnica concluída por quem tem a permissão: o chamado segue ao prestador do contrato do item escolhido
-export const concluirAvaliacaoTecnica = (usuario: AuthPayload, id: string, parecer: string) =>
-  encaminharAoPrestador(usuario, id, { de: 'AGUARDANDO_AVALIACAO_TECNICA', acao: 'CONCLUIR_AVALIACAO_TECNICA', parecer });
+export const concluirAvaliacaoTecnica = (usuario: AuthPayload, id: string, parecer: string, prioridadeCivil?: PrioridadeCivil) =>
+  encaminharAoPrestador(usuario, id, { de: 'AGUARDANDO_AVALIACAO_TECNICA', acao: 'CONCLUIR_AVALIACAO_TECNICA', parecer, prioridadeCivil });
 
 // Fila "já avaliados": o triador atribui o chamado ao prestador (pode trocar o item de contrato)
-export const encaminharAvaliado = (usuario: AuthPayload, id: string, contratoItemId?: string) =>
-  encaminharAoPrestador(usuario, id, { de: 'AVALIADO', acao: 'ENCAMINHAR_CHAMADO_AVALIADO', contratoItemId });
+export const encaminharAvaliado = (usuario: AuthPayload, id: string, contratoItemId?: string, prioridadeCivil?: PrioridadeCivil) =>
+  encaminharAoPrestador(usuario, id, { de: 'AVALIADO', acao: 'ENCAMINHAR_CHAMADO_AVALIADO', contratoItemId, prioridadeCivil });
 
 // Mudança de situação feita só com a condição de status na gravação (sem corrida) e com auditoria
 async function mudarSituacao(

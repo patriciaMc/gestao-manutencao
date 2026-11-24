@@ -1,3 +1,5 @@
+import type { PrioridadeCivil } from '@prisma/client';
+import { iniciarSlaCivil } from './sla-civil';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../errors/AppError';
 import { registrarAuditoria } from '../../services/auditoria.service';
@@ -17,7 +19,7 @@ function exigirCivil(tipo: string) {
 }
 
 // A avaliação técnica pede o orçamento: o chamado vai ao prestador só para cotar (ainda não para executar)
-export async function solicitarOrcamento(usuario: AuthPayload, id: string, instrucoes: string) {
+export async function solicitarOrcamento(usuario: AuthPayload, id: string, instrucoes: string, prioridadeCivil?: PrioridadeCivil) {
   const manutencao = await buscarPorId(usuario, id);
   exigirCivil(manutencao.tipo);
   if (manutencao.status !== 'AGUARDANDO_AVALIACAO_TECNICA' || !manutencao.contratoItemId) {
@@ -27,7 +29,7 @@ export async function solicitarOrcamento(usuario: AuthPayload, id: string, instr
     const { contratoId } = await vincularItem(tx, manutencao.contratoItemId as string, id, { novaSelecao: false });
     const gravado = await tx.manutencao.updateMany({
       where: { id, status: 'AGUARDANDO_AVALIACAO_TECNICA' },
-      data: { status: 'AGUARDANDO_ORCAMENTO', contratoId, instrucoesOrcamento: instrucoes, rodadaOrcamento: 1, motivoRejeicaoOrcamento: null },
+      data: { status: 'AGUARDANDO_ORCAMENTO', contratoId, instrucoesOrcamento: instrucoes, ...(prioridadeCivil && { prioridadeCivil }), rodadaOrcamento: 1, motivoRejeicaoOrcamento: null },
     });
     if (gravado.count === 0) throw new AppError('Este chamado já saiu da avaliação técnica.', 409);
     await registrarAuditoria(
@@ -41,7 +43,7 @@ export async function solicitarOrcamento(usuario: AuthPayload, id: string, instr
 }
 
 // Risco à vida: o chamado segue ao prestador sem orçamento prévio, com a justificativa registrada
-export async function dispensarOrcamento(usuario: AuthPayload, id: string, justificativa: string) {
+export async function dispensarOrcamento(usuario: AuthPayload, id: string, justificativa: string, prioridadeCivil?: PrioridadeCivil) {
   const manutencao = await buscarPorId(usuario, id);
   exigirCivil(manutencao.tipo);
   return encaminharAoPrestador(usuario, id, {
@@ -49,6 +51,7 @@ export async function dispensarOrcamento(usuario: AuthPayload, id: string, justi
     acao: 'DISPENSAR_ORCAMENTO_RISCO_VIDA',
     parecer: justificativa,
     dispensaOrcamento: justificativa,
+    prioridadeCivil,
   });
 }
 
@@ -95,9 +98,10 @@ export async function aprovarOrcamento(usuario: AuthPayload, id: string, valor: 
     const vinculo = manutencao.contratoItemId
       ? await vincularItem(tx, manutencao.contratoItemId, id, { valorNovo: valor, novaSelecao: false, rotulo: 'orçamento aprovado' })
       : {};
+    const dataEnvio = new Date();
     const gravado = await tx.manutencao.updateMany({
       where: { id, status: 'ORCAMENTO_REGISTRADO' },
-      data: { status: 'AGUARDANDO_EXECUCAO', cotacaoAprovadaId: entrega.id, orcamentoValor: valor, dataEnvio: new Date(), ...vinculo },
+      data: { status: 'AGUARDANDO_EXECUCAO', cotacaoAprovadaId: entrega.id, orcamentoValor: valor, dataEnvio, ...iniciarSlaCivil(manutencao, dataEnvio), ...vinculo },
     });
     if (gravado.count === 0) throw new AppError('Não há orçamento aguardando decisão.', 409);
     await registrarAuditoria(

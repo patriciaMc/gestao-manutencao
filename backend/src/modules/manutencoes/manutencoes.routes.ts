@@ -220,13 +220,15 @@ manutencoesRouter.post('/:id/solicitar-avaliacao', permitirCom('MANUTENCAO_TRIAR
   res.json(await service.solicitarAvaliacaoTecnica(req.usuario!, req.params.id));
 });
 
+const prioridadeCivilSchema = z.enum(['BAIXA', 'MEDIA', 'CRITICA']).optional();
+
 // RN03 — somente o Administrador decide
 manutencoesRouter.post(
   '/:id/aprovar',
   permitirCom('MANUTENCAO_TRIAR'),
-  validarBody(z.object({ contratoItemId: z.string().uuid('selecione o item de contrato que cobre a manutenção') })),
+  validarBody(z.object({ contratoItemId: z.string().uuid('selecione o item de contrato que cobre a manutenção'), prioridadeCivil: prioridadeCivilSchema })),
   async (req, res) => {
-    res.json(await service.aprovar(req.usuario!, req.params.id, req.body.contratoItemId));
+    res.json(await service.aprovar(req.usuario!, req.params.id, req.body.contratoItemId, req.body.prioridadeCivil));
   },
 );
 
@@ -234,9 +236,9 @@ manutencoesRouter.post(
 manutencoesRouter.post(
   '/:id/concluir-avaliacao',
   permitirCom('MANUTENCAO_AVALIAR'),
-  validarBody(z.object({ parecer: z.string().trim().min(3, 'informe o parecer da avaliação técnica').max(1000) })),
+  validarBody(z.object({ parecer: z.string().trim().min(3, 'informe o parecer da avaliação técnica').max(1000), prioridadeCivil: prioridadeCivilSchema })),
   async (req, res) => {
-    res.json(await service.concluirAvaliacaoTecnica(req.usuario!, req.params.id, req.body.parecer));
+    res.json(await service.concluirAvaliacaoTecnica(req.usuario!, req.params.id, req.body.parecer, req.body.prioridadeCivil));
   },
 );
 
@@ -251,9 +253,9 @@ manutencoesRouter.post('/:id/devolver-avaliado', permitirCom('MANUTENCAO_AVALIAR
 manutencoesRouter.post(
   '/:id/encaminhar-avaliado',
   permitirCom('MANUTENCAO_TRIAR'),
-  validarBody(z.object({ contratoItemId: z.string().uuid().optional() })),
+  validarBody(z.object({ contratoItemId: z.string().uuid().optional(), prioridadeCivil: prioridadeCivilSchema })),
   async (req, res) => {
-    res.json(await service.encaminharAvaliado(req.usuario!, req.params.id, req.body.contratoItemId));
+    res.json(await service.encaminharAvaliado(req.usuario!, req.params.id, req.body.contratoItemId, req.body.prioridadeCivil));
   },
 );
 
@@ -466,9 +468,9 @@ manutencoesRouter.delete('/:id/relatorio/:linhaId', permitir(Perfil.TERCEIRIZADA
 manutencoesRouter.post(
   '/:id/solicitar-orcamento',
   permitirCom('MANUTENCAO_AVALIAR'),
-  validarBody(z.object({ instrucoes: z.string().trim().min(3, 'diga o que precisa ser orçado').max(2000) })),
+  validarBody(z.object({ instrucoes: z.string().trim().min(3, 'diga o que precisa ser orçado').max(2000), prioridadeCivil: prioridadeCivilSchema })),
   async (req, res) => {
-    res.json(await orcamento.solicitarOrcamento(req.usuario!, req.params.id, req.body.instrucoes));
+    res.json(await orcamento.solicitarOrcamento(req.usuario!, req.params.id, req.body.instrucoes, req.body.prioridadeCivil));
   },
 );
 
@@ -476,9 +478,9 @@ manutencoesRouter.post(
 manutencoesRouter.post(
   '/:id/dispensar-orcamento',
   permitirCom('MANUTENCAO_AVALIAR'),
-  validarBody(z.object({ justificativa: z.string().trim().min(10, 'explique o risco à vida').max(1000) })),
+  validarBody(z.object({ justificativa: z.string().trim().min(10, 'explique o risco à vida').max(1000), prioridadeCivil: prioridadeCivilSchema })),
   async (req, res) => {
-    res.json(await orcamento.dispensarOrcamento(req.usuario!, req.params.id, req.body.justificativa));
+    res.json(await orcamento.dispensarOrcamento(req.usuario!, req.params.id, req.body.justificativa, req.body.prioridadeCivil));
   },
 );
 

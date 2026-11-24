@@ -81,6 +81,12 @@ enum TipoLinhaRelatorio {
   MATERIAL
 }
 
+enum PrioridadeCivil {
+  BAIXA
+  MEDIA
+  CRITICA
+}
+
 enum StatusManutencao {
   PENDENTE_APROVACAO
   // Aprovado, mas o serviço exige avaliação técnica: espera o parecer de quem tem essa permissão antes de ir ao prestador
@@ -453,6 +459,9 @@ model Manutencao {
   confirmadoGestor             Boolean              @default(false) @map("confirmado_gestor")
   estadoPosManutencao          EstadoConservacao?   @map("estado_pos_manutencao")
   custoFinal                   Decimal?             @map("custo_final") @db.Decimal(12, 2)
+  prioridadeCivil              PrioridadeCivil?     @map("prioridade_civil")
+  slaCivilIniciadoEm           DateTime?            @map("sla_civil_iniciado_em")
+  slaCivilVenceEm              DateTime?            @map("sla_civil_vence_em")
   dataEnvio                    DateTime?            @map("data_envio")
   dataConclusao                DateTime?            @map("data_conclusao")
   criadoEm                     DateTime             @default(now()) @map("criado_em")

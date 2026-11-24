@@ -22,6 +22,7 @@ import {
   codigoManutencao,
 } from '../utils/format';
 import { nomeEquipamento, rotuloEventoManutencao, tituloManutencao } from '../utils/manutencao';
+import { ROTULO_PRIORIDADE_CIVIL } from '../components/PrioridadeCivil';
 import './Solicitacoes.css';
 import { useAlertaNativo } from '../hooks/useAlertaNativo';
 import { EsqueletoDetalhe } from '../components/Esqueletos';
@@ -167,8 +168,10 @@ function ConteudoManutencao({
 
   useEffect(() => {
     if (!acao) return;
-    if (acao === 'aprovar') document.getElementById('man-contrato-item')?.focus({ preventScroll: true });
-  }, [acao]);
+    if (acao === 'aprovar' || acao === 'encaminhar-avaliado') {
+      document.getElementById(m.tipo === 'CIVIL' ? 'civil-item-contrato' : 'man-contrato-item')?.focus({ preventScroll: true });
+    }
+  }, [acao, m.tipo]);
 
   async function executar(operacao: () => Promise<unknown>) {
     setErro(null);
@@ -266,11 +269,13 @@ function ConteudoManutencao({
   const direta = (operacao: () => Promise<unknown>) => () => void executar(operacao);
 
   if (podeTriar && m.status === 'PENDENTE_APROVACAO') {
-    item('solicitar-avaliacao', 'Solicitar avaliação técnica', direta(() => api.post(`/manutencoes/${m.id}/solicitar-avaliacao`, {})));
-    item('aprovar', 'Aprovar chamado', () => abrir('aprovar'));
+    if (!civil) {
+      item('solicitar-avaliacao', 'Solicitar avaliação técnica', direta(() => api.post(`/manutencoes/${m.id}/solicitar-avaliacao`, {})));
+      item('aprovar', 'Aprovar chamado', () => abrir('aprovar'));
+    }
     item('negar', 'Negar chamado', () => abrir('negar'));
   }
-  if (podeTriar && m.status === 'AVALIADO') {
+  if (podeTriar && !civil && m.status === 'AVALIADO') {
     item('encaminhar-avaliado', 'Encaminhar ao prestador', m.contratoItem ? direta(() => api.post(`/manutencoes/${m.id}/encaminhar-avaliado`, {})) : () => abrir('encaminhar-avaliado'));
   }
   if (podeVistoriar && m.status === 'AGUARDANDO_VISTORIA') item('vistoria', 'Registrar vistoria', () => abrir('vistoria'));
@@ -338,6 +343,14 @@ function ConteudoManutencao({
           <Link className="btn btn-outline" to={caminhoConversa('manutencao', m.id)}>
             Conversar
           </Link>
+          {podeTriar && civil && m.status === 'PENDENTE_APROVACAO' && (
+            <button type="button" className="btn btn-outline" disabled={ocupado}
+              onClick={direta(() => api.post(`/manutencoes/${m.id}/solicitar-avaliacao`, {}))}>Pedir avaliação técnica</button>
+          )}
+          {podeTriar && civil && (m.status === 'PENDENTE_APROVACAO' || m.status === 'AVALIADO') && (
+            <button type="button" className="btn btn-primary" disabled={ocupado}
+              onClick={() => abrir(m.status === 'AVALIADO' ? 'encaminhar-avaliado' : 'aprovar')}>Encaminhar ao prestador</button>
+          )}
           <MenuAcoes itens={itensMenu} ocupado={ocupado} />
         </div>
       </div>
@@ -711,6 +724,15 @@ function ConteudoManutencao({
                   <dt>Confirmação do administrador</dt>
                   <dd>{rotuloSimNao(m.confirmadoGestor)}</dd>
                 </div>
+              </>
+            )}
+            {civil && m.prioridadeCivil && (
+              <>
+                <div><dt>Prioridade</dt><dd>{ROTULO_PRIORIDADE_CIVIL[m.prioridadeCivil]}</dd></div>
+                <div><dt>Prazo do prestador</dt><dd>{
+                  !m.slaCivilIniciadoEm ? 'Aguardando liberação ao prestador'
+                    : m.slaCivilVenceEm ? formatarDataHora(m.slaCivilVenceEm) : 'Programada · sem prazo automático'
+                }</dd></div>
               </>
             )}
             {m.status === 'AGUARDANDO_VISTORIA' && m.vistoriaAgendadaEm && (

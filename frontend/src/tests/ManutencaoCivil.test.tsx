@@ -351,15 +351,17 @@ describe('Manutenção civil', () => {
     });
     render(<App />);
 
-    await acao('Aprovar chamado');
+    await userEvent.click(await screen.findByRole('button', { name: 'Encaminhar ao prestador' }));
     expect(await screen.findByText(/Chamados parecidos em aberto/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Abrir MAN-0009 · Goteira na recepção' })).toHaveAttribute('href', '/manutencoes/m9');
-    const confirmar = screen.getByRole('button', { name: 'Confirmar aprovação' });
+    const confirmar = screen.getByRole('button', { name: 'Confirmar encaminhamento' });
     expect(confirmar).toBeDisabled();
     await userEvent.selectOptions(await screen.findByLabelText('Item do contrato *'), 'i1');
+    expect(confirmar).toBeDisabled();
+    await userEvent.selectOptions(screen.getByLabelText('Prioridade'), 'CRITICA');
     await userEvent.click(confirmar);
     await waitFor(() => expect(chamadas.some((c) => c.url.endsWith('/manutencoes/m1/aprovar'))).toBe(true));
-    expect(JSON.parse(chamadas.find((c) => c.url.endsWith('/aprovar'))!.init!.body as string)).toEqual({ contratoItemId: 'i1' });
+    expect(JSON.parse(chamadas.find((c) => c.url.endsWith('/aprovar'))!.init!.body as string)).toEqual({ contratoItemId: 'i1', prioridadeCivil: 'CRITICA' });
   });
 
   it('item de contrato sem saldo continua escolhível: o saldo não bloqueia a triagem', async () => {
@@ -372,12 +374,13 @@ describe('Manutenção civil', () => {
     });
     render(<App />);
 
-    await acao('Aprovar chamado');
+    await userEvent.click(await screen.findByRole('button', { name: 'Encaminhar ao prestador' }));
     expect(await screen.findByRole('option', { name: /Manutenção predial/ })).toBeInTheDocument();
     expect(screen.queryByText(/Nenhum item de contrato/)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Confirmar aprovação' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Confirmar encaminhamento' })).toBeDisabled();
     await userEvent.selectOptions(screen.getByLabelText(/Item do contrato/), 'i1');
-    expect(screen.getByRole('button', { name: 'Confirmar aprovação' })).toBeEnabled();
+    await userEvent.selectOptions(screen.getByLabelText('Prioridade'), 'BAIXA');
+    expect(screen.getByRole('button', { name: 'Confirmar encaminhamento' })).toBeEnabled();
   });
 
   it('sem nenhum contrato vigente o chamado não pode ser aprovado', async () => {
@@ -390,9 +393,9 @@ describe('Manutenção civil', () => {
     });
     render(<App />);
 
-    await acao('Aprovar chamado');
+    await userEvent.click(await screen.findByRole('button', { name: 'Encaminhar ao prestador' }));
     expect(await screen.findByText(/Nenhum item de contrato vigente/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Confirmar aprovação' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Confirmar encaminhamento' })).toBeDisabled();
   });
 
   describe('avaliação técnica', () => {
@@ -546,7 +549,9 @@ describe('Manutenção civil', () => {
       });
       render(<App />);
 
-      await acao('Encaminhar ao prestador');
+      await userEvent.click(await screen.findByRole('button', { name: 'Encaminhar ao prestador' }));
+      await userEvent.selectOptions(screen.getByLabelText('Prioridade'), 'MEDIA');
+      await userEvent.click(screen.getByRole('button', { name: 'Confirmar encaminhamento' }));
       await waitFor(() => expect(chamadas.some((c) => c.url.endsWith('/manutencoes/m1/encaminhar-avaliado'))).toBe(true));
     });
 
@@ -579,7 +584,7 @@ describe('Manutenção civil', () => {
       await userEvent.type(screen.getByLabelText(/Parecer da avaliação técnica/), 'Reparo viável');
       await userEvent.click(encaminhar);
       await waitFor(() => expect(chamadas.some((c) => c.url.endsWith('/concluir-avaliacao'))).toBe(true));
-      expect(JSON.parse(chamadas.find((c) => c.url.endsWith('/concluir-avaliacao'))!.init!.body as string)).toEqual({ parecer: 'Reparo viável' });
+      expect(JSON.parse(chamadas.find((c) => c.url.endsWith('/concluir-avaliacao'))!.init!.body as string)).toEqual({ parecer: 'Reparo viável', prioridadeCivil: 'MEDIA' });
     });
 
     it('duplicado pede o número do chamado original', async () => {
@@ -748,7 +753,7 @@ describe('Manutenção civil', () => {
       await userEvent.click(enviar);
 
       await waitFor(() => expect(chamadas.some((c) => c.url.endsWith('/manutencoes/m1/solicitar-orcamento'))).toBe(true));
-      expect(JSON.parse(String(chamadas.find((c) => c.url.endsWith('/solicitar-orcamento'))!.init!.body))).toEqual({ instrucoes: 'Troca de 40 m² de telha' });
+      expect(JSON.parse(String(chamadas.find((c) => c.url.endsWith('/solicitar-orcamento'))!.init!.body))).toEqual({ instrucoes: 'Troca de 40 m² de telha', prioridadeCivil: 'MEDIA' });
     });
 
     it('risco à vida: encaminha sem orçamento só com justificativa de verdade', async () => {
@@ -772,6 +777,7 @@ describe('Manutenção civil', () => {
       await waitFor(() => expect(chamadas.some((c) => c.url.endsWith('/manutencoes/m1/dispensar-orcamento'))).toBe(true));
       expect(JSON.parse(String(chamadas.find((c) => c.url.endsWith('/dispensar-orcamento'))!.init!.body))).toEqual({
         justificativa: 'Telhado prestes a cair sobre a sala de espera',
+        prioridadeCivil: 'MEDIA',
       });
     });
 

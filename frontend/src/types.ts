@@ -102,6 +102,7 @@ export interface Equipamento {
 }
 
 export type TipoManutencao = 'EQUIPAMENTO' | 'CIVIL';
+export type PrioridadeCivil = 'BAIXA' | 'MEDIA' | 'CRITICA';
 
 export type TipoPergunta = 'OPCOES' | 'TEXTO';
 
@@ -264,6 +265,9 @@ export interface Manutencao {
   casoId?: string | null;
   linhasRelatorio?: LinhaRelatorio[];
   descricaoProblema: string;
+  prioridadeCivil?: PrioridadeCivil | null;
+  slaCivilIniciadoEm?: string | null;
+  slaCivilVenceEm?: string | null;
   // Só os chamados antigos têm justificativa; a abertura atual não pede mais
   justificativa?: string | null;
   motivoNegacao: string | null;
@@ -514,7 +518,7 @@ export interface ContratoItem {
   descontoPercentual: string;
   // Valor do item menos o já comprometido pelas manutenções vinculadas
   saldo: number;
-  servico: { id: string; nome: string };
+  servico: { id: string; nome: string; exigeAvaliacaoTecnica?: boolean; exigeOrcamentoPrevio?: boolean };
 }
 
 export interface Contrato {

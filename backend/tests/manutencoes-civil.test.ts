@@ -164,20 +164,26 @@ describe('Manutenção civil', () => {
   });
 
   describe('triagem, contrato e disponibilidade', () => {
-    const aprovar = () => request(app).post(`/manutencoes/${MAN}/aprovar`).set(admin()).send({ contratoItemId: ITEM });
+    const aprovar = (prioridadeCivil?: string) => request(app).post(`/manutencoes/${MAN}/aprovar`).set(admin()).send({ contratoItemId: ITEM, prioridadeCivil });
 
     it('encaminha ao prestador com o item de contrato e não mexe em equipamento', async () => {
       prismaMock.manutencao.findUnique.mockResolvedValue(civil() as never);
       prismaMock.contratoItem.findUnique.mockResolvedValue(itemCivil as never);
       comprometido(null);
       prismaMock.manutencao.update.mockResolvedValue(civil({ status: 'AGUARDANDO_EXECUCAO', contrato }) as never);
-      const res = await aprovar();
+      const res = await aprovar('CRITICA');
       expect(res.status).toBe(200);
       expect(prismaMock.manutencao.update.mock.calls[0][0].data).toMatchObject({
         status: 'AGUARDANDO_EXECUCAO',
         contratoItemId: ITEM,
         contratoId: 'ct-1',
+        prioridadeCivil: 'CRITICA',
+        slaCivilIniciadoEm: expect.any(Date),
+        slaCivilVenceEm: expect.any(Date),
       });
+      const envio = prismaMock.manutencao.update.mock.calls[0][0].data;
+      expect(envio.slaCivilIniciadoEm).toEqual(envio.dataEnvio);
+      expect(Number(envio.slaCivilVenceEm) - Number(envio.slaCivilIniciadoEm)).toBe(7200000);
       expect(prismaMock.equipamento.update).not.toHaveBeenCalled();
       expect(prismaMock.movimentacao.create).not.toHaveBeenCalled();
       // a unidade é avisada e fica sabendo quem é o responsável
@@ -200,10 +206,11 @@ describe('Manutenção civil', () => {
       prismaMock.contratoItem.findUnique.mockResolvedValue({ ...itemCivil, servico: { exigeAvaliacaoTecnica: true } } as never);
       comprometido(null);
       prismaMock.manutencao.update.mockResolvedValue(civil({ status: 'AGUARDANDO_AVALIACAO_TECNICA' }) as never);
-      const res = await aprovar();
+      const res = await aprovar('MEDIA');
       expect(res.status).toBe(200);
       const data = prismaMock.manutencao.update.mock.calls[0][0].data;
-      expect(data).toMatchObject({ status: 'AGUARDANDO_AVALIACAO_TECNICA', contratoItemId: ITEM });
+      expect(data).toMatchObject({ status: 'AGUARDANDO_AVALIACAO_TECNICA', contratoItemId: ITEM, prioridadeCivil: 'MEDIA' });
+      expect(data).not.toHaveProperty('slaCivilIniciadoEm');
       // sem contrato, o prestador não enxerga o chamado
       expect(data).not.toHaveProperty('contratoId');
     });
