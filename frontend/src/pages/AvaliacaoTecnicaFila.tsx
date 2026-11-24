@@ -13,7 +13,7 @@ type Chamado = Pick<Manutencao, 'id' | 'numero' | 'tipo' | 'titulo' | 'descricao
   vistoriaAgendadaEm: string | null;
   vistoriaResponsavel: string | null;
 };
-interface Anotacao { id: string; texto: string; compartilhada: boolean; criadoEm: string; autor: { id: string; nome: string } }
+interface Anotacao { id: string; texto: string; compartilhada: boolean; arquivadaEm?: string | null; criadoEm: string; autor: { id: string; nome: string } }
 interface Resultado { itens: Chamado[]; total: number; porPagina: number }
 
 const titulacao: Record<Visao, string> = {
@@ -56,9 +56,20 @@ function Agendamento({ chamado, aoGravar }: { chamado: Chamado; aoGravar: () => 
 }
 
 function Anotacoes({ chamado }: { chamado: Chamado }) {
+  const [arquivadas, setArquivadas] = useState(false);
+  return <div className="planejamento-notas">
+    <div className="actions-row" role="group" aria-label="Exibição de anotações">
+      <button className="btn btn-outline" type="button" aria-pressed={!arquivadas} onClick={() => setArquivadas(false)}>Ativas</button>
+      <button className="btn btn-outline" type="button" aria-pressed={arquivadas} onClick={() => setArquivadas(true)}>Arquivadas</button>
+    </div>
+    <ListaAnotacoes key={String(arquivadas)} chamado={chamado} arquivadas={arquivadas} />
+  </div>;
+}
+
+function ListaAnotacoes({ chamado, arquivadas }: { chamado: Chamado; arquivadas: boolean }) {
   const { usuario } = useAuth();
   const caminho = `/avaliacao-tecnica/${chamado.id}/anotacoes`;
-  const { dados, carregando, falha } = useCarga(() => api.get<Anotacao[]>(caminho), true, 'Não foi possível carregar as anotações.');
+  const { dados, carregando, falha } = useCarga(() => api.get<Anotacao[]>(arquivadas ? `${caminho}?arquivo=arquivadas` : caminho), true, 'Não foi possível carregar as anotações.');
   const [novas, setNovas] = useState<Anotacao[]>([]);
   const [texto, setTexto] = useState('');
   const [compartilhada, setCompartilhada] = useState(false);
@@ -80,31 +91,36 @@ function Anotacoes({ chamado }: { chamado: Chamado }) {
       setGravando(false);
     }
   }
-  async function ajustarCompartilhamento(nota: Anotacao) {
+  async function alterarAnotacao(nota: Anotacao, acao: { compartilhada: boolean } | { arquivada: boolean }) {
     if (gravando) return;
     setGravando(true);
     setErro('');
     try {
-      const atualizada = await api.patch<Anotacao>(`${caminho}/${nota.id}`, { compartilhada: !nota.compartilhada });
+      const atualizada = await api.patch<Anotacao>(`${caminho}/${nota.id}`, acao);
       setNovas((itens) => [atualizada, ...itens.filter((item) => item.id !== nota.id)]);
     } catch (falha) {
-      setErro(falha instanceof Error ? falha.message : 'Não foi possível alterar a visibilidade.');
+      setErro(falha instanceof Error ? falha.message : 'Não foi possível atualizar a anotação.');
     } finally {
       setGravando(false);
     }
   }
-  const registros = [...novas, ...(dados ?? []).filter((item) => !novas.some((nova) => nova.id === item.id))];
+  const registros = [...novas, ...(dados ?? []).filter((item) => !novas.some((nova) => nova.id === item.id))]
+    .filter((nota) => Boolean(nota.arquivadaEm) === arquivadas);
   return <div className="planejamento-notas">
     {carregando && <p role="status">Carregando anotações…</p>}
     {falha && <p role="alert">{falha}</p>}
     {registros.length > 0 ? <ul>{registros.map((nota) => <li key={nota.id}><strong>{nota.autor.nome}</strong>
-      <span> · {formatarDataHora(nota.criadoEm)} · {nota.compartilhada ? 'Compartilhada com a equipe' : 'Privada'}</span>
+      <span> · {formatarDataHora(nota.criadoEm)} · {arquivadas ? 'Arquivada' : nota.compartilhada ? 'Compartilhada com a equipe' : 'Privada'}</span>
       <p>{nota.texto}</p>
-      {nota.autor.id === usuario?.id && <button className="btn btn-outline" type="button" disabled={gravando}
-        onClick={() => void ajustarCompartilhamento(nota)}>{nota.compartilhada ? 'Tornar privada' : 'Compartilhar com a equipe'}</button>}
+      {nota.autor.id === usuario?.id && <div className="planejamento-nota-acoes">
+        <button className="btn btn-outline" type="button" disabled={gravando}
+          onClick={() => void alterarAnotacao(nota, { arquivada: !arquivadas })}>{arquivadas ? 'Desarquivar' : 'Arquivar'}</button>
+        {!arquivadas && <button className="btn btn-outline" type="button" disabled={gravando}
+          onClick={() => void alterarAnotacao(nota, { compartilhada: !nota.compartilhada })}>{nota.compartilhada ? 'Tornar privada' : 'Compartilhar com a equipe'}</button>}
+      </div>}
       </li>)}</ul> :
-      !carregando && !falha && <p>Nenhuma anotação registrada.</p>}
-    <form onSubmit={salvar}>
+      !carregando && !falha && <p>{arquivadas ? "Nenhuma anotação arquivada." : "Nenhuma anotação ativa."}</p>}
+    {!arquivadas && <form onSubmit={salvar}>
       <div className="field"><label htmlFor={`nota-${chamado.id}`}>Anotação técnica</label>
         <textarea id={`nota-${chamado.id}`} rows={3} maxLength={2000} value={texto} onChange={(evento) => setTexto(evento.target.value)} /></div>
       <label className="checkbox-linha planejamento-compartilhar">
@@ -112,8 +128,8 @@ function Anotacoes({ chamado }: { chamado: Chamado }) {
         Compartilhar com a equipe técnica
       </label>
       <button className="btn btn-outline" disabled={gravando || texto.trim().length < 3} type="submit">Salvar anotação</button>
-      {erro && <p role="alert">{erro}</p>}
-    </form>
+    </form>}
+    {erro && <p role="alert">{erro}</p>}
   </div>;
 }
 

@@ -13,3 +13,6 @@
 .planejamento-compartilhar { margin: 0 0 12px; }
 .planejamento-item-topo a { color: var(--text); text-decoration: none; }
 .planejamento-item-topo a:hover { text-decoration: underline; }
+
+.planejamento-nota-acoes { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.planejamento-notas [aria-pressed="true"] { background: var(--surface-subtle); font-weight: 650; }

@@ -13,7 +13,7 @@ Este documento registra a direção visual e as decisões de UX da plataforma. A
 
 Sob **Solicitações** no menu, as subopções **Triagem Civil** e **Triagem Equipamentos** filtram os chamados da respectiva modalidade que aguardam decisão ou retornaram da avaliação técnica. Na abertura e no detalhe, o histórico de chamados da mesma unidade e categoria fica à esquerda do conteúdo no desktop e acima dele em telas estreitas. Os destaques operacionais ordenam a fila sem mudar a prioridade registrada no chamado.
 
-**Avaliação Técnica** abre a fila de chamados enviados pela triagem. Os submenus **Agenda de visitas** e **Anotações e pareceres** mantêm o número MAN e levam ao detalhe original do chamado. A agenda filtra data e situação e registra o responsável pela visita. As anotações são pessoais até que o autor as compartilhe com a equipe técnica. **Preventivas e layout** agrupa dois cronogramas independentes, com cadastro em página própria.
+**Avaliação Técnica** abre a fila de chamados enviados pela triagem. Os submenus **Agenda de visitas** e **Anotações e pareceres** mantêm o número MAN e levam ao detalhe original do chamado. A agenda filtra data e situação e registra o responsável pela visita. As anotações são pessoais até que o autor as compartilhe com a equipe técnica. Anotações arquivadas ficam na aba do autor e recuperam a visibilidade anterior ao serem desarquivadas. **Preventivas e layout** agrupa dois cronogramas independentes, com cadastro em página própria.
 
 ## Fundamentos
 

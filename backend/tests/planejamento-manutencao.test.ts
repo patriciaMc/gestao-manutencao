@@ -61,17 +61,42 @@ describe('Avaliação, agenda e programação de manutenção', () => {
     prismaMock.anotacaoTecnica.findMany.mockResolvedValue([]);
     expect((await request(app).get(caminho).set(tecnico)).status).toBe(200);
     expect(prismaMock.anotacaoTecnica.findMany.mock.calls[0][0]?.where).toEqual({
-      manutencaoId: chamadoId, OR: [{ autorId: 'user-1' }, { compartilhada: true }],
+      manutencaoId: chamadoId, arquivadaEm: null, OR: [{ autorId: 'user-1' }, { compartilhada: true }],
     });
     prismaMock.anotacaoTecnica.findFirst.mockResolvedValueOnce(null);
     expect((await request(app).patch(`${caminho}/nota-1`).set(tecnico).send({ compartilhada: true })).status).toBe(404);
     expect(prismaMock.anotacaoTecnica.updateMany).not.toHaveBeenCalled();
-    prismaMock.anotacaoTecnica.findFirst.mockResolvedValueOnce({ id: 'nota-1', compartilhada: false } as never);
+    prismaMock.anotacaoTecnica.findFirst.mockResolvedValueOnce({ id: 'nota-1', compartilhada: false, arquivadaEm: null } as never);
     prismaMock.anotacaoTecnica.updateMany.mockResolvedValue({ count: 1 });
     expect((await request(app).patch(`${caminho}/nota-1`).set(tecnico).send({ compartilhada: true })).body.compartilhada).toBe(true);
     expect(prismaMock.anotacaoTecnica.updateMany.mock.calls[0][0].where).toEqual({
-      id: 'nota-1', manutencaoId: chamadoId, autorId: 'user-1', compartilhada: false,
+      id: 'nota-1', manutencaoId: chamadoId, autorId: 'user-1', compartilhada: false, arquivadaEm: null,
     });
+  });
+
+  it('arquiva e restaura somente notas próprias, preservando a escolha de compartilhamento', async () => {
+    const notas = `/avaliacao-tecnica/${chamadoId}/anotacoes`;
+    const rota = `${notas}/nota-1`;
+    const arquivadaEm = new Date('2026-11-24T18:00:00Z');
+    const nota = { id: 'nota-1', compartilhada: true, arquivadaEm: null };
+    prismaMock.anotacaoTecnica.findMany.mockResolvedValue([]);
+    expect((await request(app).get(notas).query({ arquivo: 'arquivadas' }).set(tecnico)).status).toBe(200);
+    expect(prismaMock.anotacaoTecnica.findMany.mock.calls[0][0]?.where).toEqual({
+      manutencaoId: chamadoId, autorId: 'user-1', arquivadaEm: { not: null },
+    });
+    prismaMock.anotacaoTecnica.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(nota as never)
+      .mockResolvedValueOnce({ ...nota, arquivadaEm } as never)
+      .mockResolvedValueOnce({ ...nota, arquivadaEm } as never);
+    prismaMock.anotacaoTecnica.updateMany.mockResolvedValue({ count: 1 });
+    expect((await request(app).patch(rota).set(tecnico).send({ arquivada: true })).status).toBe(404);
+    const arquivamento = await request(app).patch(rota).set(tecnico).send({ arquivada: true });
+    expect(arquivamento.body).toMatchObject({ compartilhada: true, arquivadaEm: expect.any(String) });
+    expect((await request(app).patch(rota).set(tecnico).send({ compartilhada: false })).status).toBe(409);
+    const restaurada = await request(app).patch(rota).set(tecnico).send({ arquivada: false });
+    expect(restaurada.body).toMatchObject({ compartilhada: true, arquivadaEm: null });
+    expect(prismaMock.anotacaoTecnica.updateMany.mock.calls[1][0].where).toMatchObject({ autorId: 'user-1', arquivadaEm });
   });
 
   it('filtra visitas agendadas no dia escolhido', async () => {

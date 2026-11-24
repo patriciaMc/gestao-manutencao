@@ -19,6 +19,8 @@ const ROTULO_EVENTO: Record<string, string> = {
   AGENDAR_VISTORIA: 'Visita agendada',
   REGISTRAR_ANOTACAO_TECNICA: 'Anotação técnica registrada',
   COMPARTILHAR_ANOTACAO_TECNICA: 'Anotação compartilhada com a equipe técnica',
+  ARQUIVAR_ANOTACAO_TECNICA: 'Anotação arquivada',
+  DESARQUIVAR_ANOTACAO_TECNICA: 'Anotação desarquivada',
   PRIVAR_ANOTACAO_TECNICA: 'Compartilhamento de anotação revogado',
   APROVAR_MANUTENCAO: 'Manutenção aprovada',
   NEGAR_MANUTENCAO: 'Manutenção negada',

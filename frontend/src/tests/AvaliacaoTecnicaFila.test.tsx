@@ -4,7 +4,7 @@ import { expect, it } from 'vitest';
 import { App } from '../App';
 import { mockFetch } from './mock-fetch';
 
-it('aplica a navegação do SGP à agenda e deixa o compartilhamento opcional', async () => {
+it('aplica a navegação do SGP e permite compartilhar, arquivar e desarquivar anotações', async () => {
   localStorage.setItem('sgp_token', 'sessao-teste');
   window.history.replaceState(null, '', '/avaliacao-tecnica/agenda');
   const chamado = {
@@ -13,14 +13,23 @@ it('aplica a navegação do SGP à agenda e deixa o compartilhamento opcional', 
   };
   const autor = { id: 'tecnica', nome: 'Técnica' };
   let texto = '';
+  let compartilhada = false;
+  let arquivadaEm: string | null = null;
+  const nota = () => ({ id: 'n1', autor, texto, compartilhada, arquivadaEm, criadoEm: '2026-11-24T13:00:00Z' });
   const chamadas = mockFetch({
     '/auth/me': { body: { ...autor, perfil: 'OPERADOR', permissoes: ['MANUTENCAO_CONSULTAR', 'MANUTENCAO_AVALIAR'] } },
     '/unidades': { body: [chamado.unidade] },
-    '/avaliacao-tecnica/m1/anotacoes/n1': () => ({ body: { id: 'n1', autor, texto, compartilhada: true, criadoEm: '2026-11-24T13:00:00Z' } }),
+    '/avaliacao-tecnica/m1/anotacoes/n1': (init) => {
+      const acao = JSON.parse(String(init?.body));
+      if ('compartilhada' in acao) compartilhada = acao.compartilhada;
+      if ('arquivada' in acao) arquivadaEm = acao.arquivada ? '2026-11-24T14:00:00Z' : null;
+      return { body: nota() };
+    },
+    '/avaliacao-tecnica/m1/anotacoes?arquivo=arquivadas': () => ({ body: arquivadaEm ? [nota()] : [] }),
     '/avaliacao-tecnica/m1/anotacoes': (init) => {
-      if (init?.method !== 'POST') return { body: [] };
+      if (init?.method !== 'POST') return { body: texto && !arquivadaEm ? [nota()] : [] };
       texto = JSON.parse(String(init.body)).texto;
-      return { status: 201, body: { id: 'n1', autor, texto, compartilhada: false, criadoEm: '2026-11-24T13:00:00Z' } };
+      return { status: 201, body: nota() };
     },
     '/avaliacao-tecnica?': { body: { itens: [chamado], total: 1, porPagina: 25 } },
   });
@@ -40,5 +49,12 @@ it('aplica a navegação do SGP à agenda e deixa o compartilhamento opcional', 
   const salvar = chamadas.find((chamada) => chamada.init?.method === 'POST');
   expect(JSON.parse(String(salvar?.init?.body))).toEqual({ texto: 'Levar multímetro.', compartilhada: false });
   await userEvent.click(await screen.findByRole('button', { name: 'Compartilhar com a equipe' }));
+  expect(await screen.findByText(/Compartilhada com a equipe/)).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Arquivar' }));
+  expect(await screen.findByText('Nenhuma anotação ativa.')).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Arquivadas' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Desarquivar' }));
+  expect(await screen.findByText('Nenhuma anotação arquivada.')).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Ativas' }));
   expect(await screen.findByText(/Compartilhada com a equipe/)).toBeInTheDocument();
 });

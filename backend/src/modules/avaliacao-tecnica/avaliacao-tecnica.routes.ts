@@ -34,7 +34,7 @@ avaliacaoTecnicaRouter.get('/', async (req, res) => {
   const resultado = consulta.safeParse(req.query);
   if (!resultado.success) throw new AppError('Filtros da avaliação inválidos.', 422);
   const { visao, unidadeId, tipo, busca, pagina, situacao, diaInicio, diaFim } = resultado.data;
-  const visibilidadeAnotacao = { OR: [{ autorId: req.usuario!.sub }, { compartilhada: true }] };
+  const visibilidadeAnotacao = { OR: [{ autorId: req.usuario!.sub }, { compartilhada: true, arquivadaEm: null }] };
   const agenda: Prisma.ManutencaoWhereInput = situacao === 'realizadas'
     ? { status: { not: 'AGUARDANDO_VISTORIA' }, parecerVistoria: { not: null } }
     : { status: 'AGUARDANDO_VISTORIA' };
@@ -100,11 +100,16 @@ avaliacaoTecnicaRouter.patch('/:id/visita', validarBody(z.object({
   res.json(visita);
 });
 
-const selecaoAnotacao = { id: true, texto: true, compartilhada: true, criadoEm: true, autor: { select: { id: true, nome: true } } } as const;
+const selecaoAnotacao = { id: true, texto: true, compartilhada: true, arquivadaEm: true, criadoEm: true, autor: { select: { id: true, nome: true } } } as const;
 
 avaliacaoTecnicaRouter.get('/:id/anotacoes', async (req, res) => {
+  const arquivo = z.enum(['ativas', 'arquivadas']).default('ativas').safeParse(req.query.arquivo);
+  if (!arquivo.success) throw new AppError('Filtro de anotações inválido.', 422);
+  const visibilidade = arquivo.data === 'arquivadas'
+    ? { autorId: req.usuario!.sub, arquivadaEm: { not: null } }
+    : { arquivadaEm: null, OR: [{ autorId: req.usuario!.sub }, { compartilhada: true }] };
   res.json(await prisma.anotacaoTecnica.findMany({
-    where: { manutencaoId: req.params.id, OR: [{ autorId: req.usuario!.sub }, { compartilhada: true }] }, select: selecaoAnotacao,
+    where: { manutencaoId: req.params.id, ...visibilidade }, select: selecaoAnotacao,
     orderBy: [{ criadoEm: 'desc' }, { id: 'desc' }], take: 50,
   }));
 });
@@ -130,22 +135,34 @@ avaliacaoTecnicaRouter.post('/:id/anotacoes', validarBody(z.object({
   res.status(201).json(anotacao);
 });
 
-avaliacaoTecnicaRouter.patch('/:id/anotacoes/:notaId', validarBody(z.object({
-  compartilhada: z.boolean(),
-})), async (req, res) => {
-  const compartilhada = req.body.compartilhada as boolean;
+const atualizarAnotacao = z.object({
+  compartilhada: z.boolean().optional(),
+  arquivada: z.boolean().optional(),
+}).strict().refine((valores) => (valores.compartilhada === undefined) !== (valores.arquivada === undefined), {
+  message: 'Escolha uma ação para a anotação.',
+});
+
+avaliacaoTecnicaRouter.patch('/:id/anotacoes/:notaId', validarBody(atualizarAnotacao), async (req, res) => {
+  const { compartilhada, arquivada } = req.body as z.infer<typeof atualizarAnotacao>;
   const anotacao = await prisma.$transaction(async (tx) => {
     const where = { id: req.params.notaId, manutencaoId: req.params.id, autorId: req.usuario!.sub };
     const registro = await tx.anotacaoTecnica.findFirst({ where, select: selecaoAnotacao });
     if (!registro) throw new AppError('Anotação não encontrada.', 404);
-    if (registro.compartilhada === compartilhada) return registro;
-    const alteracao = await tx.anotacaoTecnica.updateMany({ where: { ...where, compartilhada: registro.compartilhada }, data: { compartilhada } });
+    if (compartilhada !== undefined && registro.arquivadaEm) throw new AppError('Desarquive a anotação para alterar o compartilhamento.', 409);
+    if (compartilhada === registro.compartilhada || arquivada === Boolean(registro.arquivadaEm)) return registro;
+    const dados = arquivada === undefined ? { compartilhada } : { arquivadaEm: arquivada ? new Date() : null };
+    const alteracao = await tx.anotacaoTecnica.updateMany({
+      where: { ...where, arquivadaEm: registro.arquivadaEm, compartilhada: registro.compartilhada }, data: dados,
+    });
     if (!alteracao.count) throw new AppError('A anotação foi alterada. Atualize a página.', 409);
+    const acao = arquivada !== undefined
+      ? (arquivada ? 'ARQUIVAR_ANOTACAO_TECNICA' : 'DESARQUIVAR_ANOTACAO_TECNICA')
+      : (compartilhada ? 'COMPARTILHAR_ANOTACAO_TECNICA' : 'PRIVAR_ANOTACAO_TECNICA');
     await registrarAuditoria({
-      usuarioId: req.usuario!.sub, acao: compartilhada ? 'COMPARTILHAR_ANOTACAO_TECNICA' : 'PRIVAR_ANOTACAO_TECNICA',
-      entidade: 'manutencao', entidadeId: req.params.id, dadosDepois: { anotacaoId: registro.id },
+      usuarioId: req.usuario!.sub, acao, entidade: 'manutencao',
+      entidadeId: req.params.id, dadosDepois: { anotacaoId: registro.id },
     }, tx);
-    return { ...registro, compartilhada };
+    return { ...registro, ...dados };
   });
   res.json(anotacao);
 });
