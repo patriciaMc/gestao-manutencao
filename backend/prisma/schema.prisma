@@ -385,6 +385,7 @@ model Manutencao {
   parecerTecnico               String?              @map("parecer_tecnico")
   // O que a avaliação técnica pediu ao solicitante ao devolver o chamado à triagem (limpo ao aprovar de novo)
   informacoesSolicitadas       String?              @map("informacoes_solicitadas")
+  vistoriaResponsavel          String?              @map("vistoria_responsavel")
   vistoriaAgendadaEm           DateTime?            @map("vistoria_agendada_em")
   parecerVistoria              String?              @map("parecer_vistoria")
   orientacoesTerceirizada      String?              @map("orientacoes_terceirizada")
@@ -997,6 +998,7 @@ model AnotacaoTecnica {
   autorId      String     @map("autor_id")
   autor        Usuario    @relation(fields: [autorId], references: [id], onDelete: Restrict)
   texto        String
+  compartilhada Boolean   @default(false)
   criadoEm     DateTime   @default(now()) @map("criado_em")
 
   @@index([manutencaoId, criadoEm])

@@ -471,7 +471,7 @@ export async function solicitarInformacoes(usuario: AuthPayload, id: string, mot
 export async function marcarVistoria(usuario: AuthPayload, id: string) {
   const m = await buscarPorId(usuario, id);
   exigirEmAvaliacao(m);
-  return mudarSituacao(usuario, id, { de: 'AGUARDANDO_AVALIACAO_TECNICA', para: 'AGUARDANDO_VISTORIA', acao: 'MARCAR_VISTORIA', dados: { vistoriaAgendadaEm: null } });
+  return mudarSituacao(usuario, id, { de: 'AGUARDANDO_AVALIACAO_TECNICA', para: 'AGUARDANDO_VISTORIA', acao: 'MARCAR_VISTORIA', dados: { vistoriaAgendadaEm: null, vistoriaResponsavel: null } });
 }
 
 // Depois da visita, o parecer é registrado e o chamado volta à avaliação, que decide de novo

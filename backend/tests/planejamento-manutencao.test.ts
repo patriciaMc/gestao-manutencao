@@ -52,8 +52,37 @@ describe('Avaliação, agenda e programação de manutenção', () => {
     prismaMock.anotacaoTecnica.create.mockResolvedValue({ id: 'nota', texto: 'Conferir acesso ao setor.' } as never);
     const rota = `/avaliacao-tecnica/${chamadoId}/anotacoes`;
     expect((await request(app).post(rota).set(tecnico).send({ texto: 'Conferir acesso ao setor.' })).status).toBe(201);
-    expect(prismaMock.anotacaoTecnica.create.mock.calls[0][0].data).toMatchObject({ manutencaoId: chamadoId, autorId: 'user-1' });
+    expect(prismaMock.anotacaoTecnica.create.mock.calls[0][0].data).toMatchObject({ manutencaoId: chamadoId, autorId: 'user-1', compartilhada: false });
     expect(prismaMock.logAuditoria.create.mock.calls[0][0].data.dadosDepois).toEqual({ anotacaoId: 'nota' });
+  });
+
+  it('lista somente anotações próprias ou compartilhadas e impede alteração por outro usuário', async () => {
+    const caminho = `/avaliacao-tecnica/${chamadoId}/anotacoes`;
+    prismaMock.anotacaoTecnica.findMany.mockResolvedValue([]);
+    expect((await request(app).get(caminho).set(tecnico)).status).toBe(200);
+    expect(prismaMock.anotacaoTecnica.findMany.mock.calls[0][0]?.where).toEqual({
+      manutencaoId: chamadoId, OR: [{ autorId: 'user-1' }, { compartilhada: true }],
+    });
+    prismaMock.anotacaoTecnica.findFirst.mockResolvedValueOnce(null);
+    expect((await request(app).patch(`${caminho}/nota-1`).set(tecnico).send({ compartilhada: true })).status).toBe(404);
+    expect(prismaMock.anotacaoTecnica.updateMany).not.toHaveBeenCalled();
+    prismaMock.anotacaoTecnica.findFirst.mockResolvedValueOnce({ id: 'nota-1', compartilhada: false } as never);
+    prismaMock.anotacaoTecnica.updateMany.mockResolvedValue({ count: 1 });
+    expect((await request(app).patch(`${caminho}/nota-1`).set(tecnico).send({ compartilhada: true })).body.compartilhada).toBe(true);
+    expect(prismaMock.anotacaoTecnica.updateMany.mock.calls[0][0].where).toEqual({
+      id: 'nota-1', manutencaoId: chamadoId, autorId: 'user-1', compartilhada: false,
+    });
+  });
+
+  it('filtra visitas agendadas no dia escolhido', async () => {
+    prismaMock.manutencao.findMany.mockResolvedValue([]);
+    const res = await request(app).get('/avaliacao-tecnica').set(tecnico).query({
+      visao: 'agenda', situacao: 'agendadas', diaInicio: '2026-12-04T03:00:00Z', diaFim: '2026-12-05T03:00:00Z',
+    });
+    expect(res.status).toBe(200);
+    expect(prismaMock.manutencao.findMany.mock.calls[0][0]?.where).toMatchObject({
+      status: 'AGUARDANDO_VISTORIA', vistoriaAgendadaEm: { gte: new Date('2026-12-04T03:00:00Z'), lt: new Date('2026-12-05T03:00:00Z') },
+    });
   });
 
   it('cadastra programação de layout apenas para unidade ativa e perfil de triagem', async () => {

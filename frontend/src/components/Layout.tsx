@@ -51,7 +51,7 @@ const TABS: TabDef[] = [
   { para: '/avaliacao-tecnica', rotulo: 'Avaliação Técnica', icone: <IconeManutencoes />, perfis: ['OPERADOR'], permissoes: ['MANUTENCAO_AVALIAR', 'MANUTENCAO_VISTORIAR'],
     sub: [{ para: '/avaliacao-tecnica/agenda', rotulo: 'Agenda de visitas' }, { para: '/avaliacao-tecnica/pareceres', rotulo: 'Anotações e pareceres' }] },
   { para: '/programacoes', rotulo: 'Preventivas e layout', icone: <IconeManutencoes />, perfis: ['OPERADOR'], permissoes: ['MANUTENCAO_TRIAR'],
-    sub: [{ para: '/programacoes/preventivas', rotulo: 'Cronograma preventivas' }, { para: '/programacoes/layout', rotulo: 'Cronograma layout' }] },
+    sub: [{ para: '/programacoes/preventivas', rotulo: 'Cronograma preventivas' }, { para: '/programacoes/layout', rotulo: 'Alteração de layout' }] },
   { para: '/estoque', rotulo: 'Estoque', icone: <IconeEstoque />, perfis: ['OPERADOR', 'GALPAO'], permissoes: ['ESTOQUE_GERENCIAR'] },
   { para: '/atas', rotulo: 'Atas', icone: <IconeAtas />, perfis: ['OPERADOR'], permissoes: ['ATAS_GERENCIAR'] },
   { para: '/contratos', rotulo: 'Contratos', icone: <IconeContratos />, perfis: ['OPERADOR', 'TERCEIRIZADA'], permissoes: ['CONTRATOS_GERENCIAR', 'MANUTENCAO_CONSULTAR'] },
@@ -137,6 +137,10 @@ export function Layout() {
       ? 'Inventário'
       : location.pathname.startsWith('/solicitacoes') || location.pathname.startsWith('/manutencoes')
         ? 'Solicitações'
+        : location.pathname.startsWith('/avaliacao-tecnica')
+          ? 'Avaliação Técnica'
+        : location.pathname.startsWith('/programacoes')
+          ? 'Preventivas e layout'
         : location.pathname.startsWith('/estoque')
           ? 'Estoque'
         : location.pathname.startsWith('/atas')
@@ -272,7 +276,7 @@ export function Layout() {
               {tab.para === '/solicitacoes' && pode(usuario, 'MANUTENCAO_CONSULTAR') && pode(usuario, 'MANUTENCAO_TRIAR') && (
                 <div className="sidebar-submenu" role="group" aria-label="Triagens de Solicitações">
                   {([['TRIAGEM_CIVIL', 'Triagem Civil'], ['TRIAGEM_EQUIPAMENTOS', 'Triagem Equipamentos']] as const).map(([tipo, rotulo]) => {
-                    const ativa = location.pathname === '/solicitacoes' && new URLSearchParams(location.search).get('tipo') === tipo;
+                    const ativa = location.pathname.replace(/\/$/, '') === '/solicitacoes' && new URLSearchParams(location.search).get('tipo') === tipo;
                     return <Link key={tipo} to={`/solicitacoes?tipo=${tipo}`} onClick={fecharSidebar}
                       className={`sidebar-sublink${ativa ? ' active' : ''}`} aria-current={ativa ? 'page' : undefined}>{rotulo}</Link>;
                   })}

@@ -8,3 +8,8 @@
 .planejamento-notas ul { padding-left: 20px; }
 .planejamento-paginacao { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .planejamento-formulario textarea { width: 100%; }
+
+.planejamento-subtitulo { margin: 18px 0 8px; font-size: 1rem; }
+.planejamento-compartilhar { margin: 0 0 12px; }
+.planejamento-item-topo a { color: var(--text); text-decoration: none; }
+.planejamento-item-topo a:hover { text-decoration: underline; }

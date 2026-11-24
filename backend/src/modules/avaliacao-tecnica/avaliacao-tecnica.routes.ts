@@ -13,7 +13,7 @@ avaliacaoTecnicaRouter.use(autenticar, permitirCom('MANUTENCAO_CONSULTAR'), perm
 
 const selecaoChamado = {
   id: true, numero: true, tipo: true, titulo: true, descricaoProblema: true, status: true,
-  criadoEm: true, vistoriaAgendadaEm: true, parecerTecnico: true, parecerVistoria: true,
+  criadoEm: true, vistoriaAgendadaEm: true, vistoriaResponsavel: true, parecerTecnico: true, parecerVistoria: true,
   unidade: { select: { id: true, nome: true } },
   equipamento: { select: { descricao: true, tombamento: true } },
 } satisfies Prisma.ManutencaoSelect;
@@ -23,6 +23,9 @@ const consulta = z.object({
   unidadeId: z.string().uuid().optional(),
   tipo: z.enum(['CIVIL', 'EQUIPAMENTO']).optional(),
   busca: z.string().trim().max(120).optional(),
+  situacao: z.enum(['pendentes', 'sem-data', 'agendadas', 'realizadas']).optional(),
+  diaInicio: z.iso.datetime().optional(),
+  diaFim: z.iso.datetime().optional(),
   pagina: z.coerce.number().int().min(1).max(1000).default(1),
 });
 const POR_PAGINA = 25;
@@ -30,15 +33,25 @@ const POR_PAGINA = 25;
 avaliacaoTecnicaRouter.get('/', async (req, res) => {
   const resultado = consulta.safeParse(req.query);
   if (!resultado.success) throw new AppError('Filtros da avaliação inválidos.', 422);
-  const { visao, unidadeId, tipo, busca, pagina } = resultado.data;
+  const { visao, unidadeId, tipo, busca, pagina, situacao, diaInicio, diaFim } = resultado.data;
+  const visibilidadeAnotacao = { OR: [{ autorId: req.usuario!.sub }, { compartilhada: true }] };
+  const agenda: Prisma.ManutencaoWhereInput = situacao === 'realizadas'
+    ? { status: { not: 'AGUARDANDO_VISTORIA' }, parecerVistoria: { not: null } }
+    : { status: 'AGUARDANDO_VISTORIA' };
+  if (visao === 'agenda' && (diaInicio || diaFim) && (!diaInicio || !diaFim || Date.parse(diaInicio) >= Date.parse(diaFim))) {
+    throw new AppError('Data da agenda inválida.', 422);
+  }
+  if (situacao === 'sem-data') agenda.vistoriaAgendadaEm = null;
+  else if (diaInicio && diaFim) agenda.vistoriaAgendadaEm = { gte: new Date(diaInicio), lt: new Date(diaFim) };
+  else if (situacao === 'agendadas') agenda.vistoriaAgendadaEm = { not: null };
   const base: Prisma.ManutencaoWhereInput = visao === 'agenda'
-    ? { status: 'AGUARDANDO_VISTORIA' }
+    ? agenda
     : visao === 'fila'
       ? { status: 'AGUARDANDO_AVALIACAO_TECNICA' }
       : { OR: [
           { status: { in: ['AGUARDANDO_AVALIACAO_TECNICA', 'AGUARDANDO_VISTORIA', 'AVALIADO'] } },
           { parecerTecnico: { not: null } }, { parecerVistoria: { not: null } },
-          { anotacoesTecnicas: { some: {} } },
+          { anotacoesTecnicas: { some: visibilidadeAnotacao } },
         ] };
   const codigo = busca?.match(/^(?:MAN-)?(\d{1,9})$/i);
   const where: Prisma.ManutencaoWhereInput = {
@@ -48,6 +61,8 @@ avaliacaoTecnicaRouter.get('/', async (req, res) => {
       { titulo: { contains: busca, mode: 'insensitive' } },
       { descricaoProblema: { contains: busca, mode: 'insensitive' } },
       { unidade: { nome: { contains: busca, mode: 'insensitive' } } },
+      { categoriaCivil: { nome: { contains: busca, mode: 'insensitive' } } },
+      { equipamento: { tipoEquipamento: { categoria: { nome: { contains: busca, mode: 'insensitive' } } } } },
     ] }] } : {}),
   };
   const [total, itens] = await prisma.$transaction([
@@ -65,42 +80,45 @@ avaliacaoTecnicaRouter.get('/', async (req, res) => {
 
 avaliacaoTecnicaRouter.patch('/:id/visita', validarBody(z.object({
   dataHora: z.iso.datetime({ offset: true }),
+  responsavel: z.string().trim().max(120).optional(),
 })), async (req, res) => {
   const dataHora = new Date(req.body.dataHora);
   if (dataHora <= new Date()) throw new AppError('Selecione uma data e hora futuras.', 422);
+  const responsavel = req.body.responsavel as string | undefined;
   const visita = await prisma.$transaction(async (tx) => {
     const alterado = await tx.manutencao.updateMany({
       where: { id: req.params.id, status: 'AGUARDANDO_VISTORIA' },
-      data: { vistoriaAgendadaEm: dataHora },
+      data: { vistoriaAgendadaEm: dataHora, ...(responsavel !== undefined && { vistoriaResponsavel: responsavel || null }) },
     });
     if (!alterado.count) throw new AppError('O chamado não está aguardando vistoria.', 409);
     await registrarAuditoria({
       usuarioId: req.usuario!.sub, acao: 'AGENDAR_VISTORIA', entidade: 'manutencao', entidadeId: req.params.id,
-      dadosDepois: { vistoriaAgendadaEm: dataHora.toISOString() },
+      dadosDepois: { vistoriaAgendadaEm: dataHora.toISOString(), ...(responsavel !== undefined && { responsavel: responsavel || null }) },
     }, tx);
     return tx.manutencao.findUniqueOrThrow({ where: { id: req.params.id }, select: selecaoChamado });
   });
   res.json(visita);
 });
 
-const selecaoAnotacao = { id: true, texto: true, criadoEm: true, autor: { select: { nome: true } } } as const;
+const selecaoAnotacao = { id: true, texto: true, compartilhada: true, criadoEm: true, autor: { select: { id: true, nome: true } } } as const;
 
 avaliacaoTecnicaRouter.get('/:id/anotacoes', async (req, res) => {
   res.json(await prisma.anotacaoTecnica.findMany({
-    where: { manutencaoId: req.params.id }, select: selecaoAnotacao,
+    where: { manutencaoId: req.params.id, OR: [{ autorId: req.usuario!.sub }, { compartilhada: true }] }, select: selecaoAnotacao,
     orderBy: [{ criadoEm: 'desc' }, { id: 'desc' }], take: 50,
   }));
 });
 
 avaliacaoTecnicaRouter.post('/:id/anotacoes', validarBody(z.object({
   texto: z.string().trim().min(3).max(2000),
+  compartilhada: z.boolean().default(false),
 })), async (req, res) => {
   const anotacao = await prisma.$transaction(async (tx) => {
     const id = req.params.id;
     const chamado = await tx.manutencao.findUnique({ where: { id }, select: { id: true } });
     if (!chamado) throw new AppError('Manutenção não encontrada.', 404);
     const registro = await tx.anotacaoTecnica.create({
-      data: { manutencaoId: id, autorId: req.usuario!.sub, texto: req.body.texto },
+      data: { manutencaoId: id, autorId: req.usuario!.sub, texto: req.body.texto, compartilhada: req.body.compartilhada },
       select: selecaoAnotacao,
     });
     await registrarAuditoria({
@@ -110,4 +128,24 @@ avaliacaoTecnicaRouter.post('/:id/anotacoes', validarBody(z.object({
     return registro;
   });
   res.status(201).json(anotacao);
+});
+
+avaliacaoTecnicaRouter.patch('/:id/anotacoes/:notaId', validarBody(z.object({
+  compartilhada: z.boolean(),
+})), async (req, res) => {
+  const compartilhada = req.body.compartilhada as boolean;
+  const anotacao = await prisma.$transaction(async (tx) => {
+    const where = { id: req.params.notaId, manutencaoId: req.params.id, autorId: req.usuario!.sub };
+    const registro = await tx.anotacaoTecnica.findFirst({ where, select: selecaoAnotacao });
+    if (!registro) throw new AppError('Anotação não encontrada.', 404);
+    if (registro.compartilhada === compartilhada) return registro;
+    const alteracao = await tx.anotacaoTecnica.updateMany({ where: { ...where, compartilhada: registro.compartilhada }, data: { compartilhada } });
+    if (!alteracao.count) throw new AppError('A anotação foi alterada. Atualize a página.', 409);
+    await registrarAuditoria({
+      usuarioId: req.usuario!.sub, acao: compartilhada ? 'COMPARTILHAR_ANOTACAO_TECNICA' : 'PRIVAR_ANOTACAO_TECNICA',
+      entidade: 'manutencao', entidadeId: req.params.id, dadosDepois: { anotacaoId: registro.id },
+    }, tx);
+    return { ...registro, compartilhada };
+  });
+  res.json(anotacao);
 });

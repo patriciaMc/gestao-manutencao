@@ -13,7 +13,7 @@ interface Programacao {
 interface Resultado { itens: Programacao[]; total: number; porPagina: number }
 
 export const caminhoCronograma = (tipo: TipoProgramacao) => `/programacoes/${tipo === 'PREVENTIVA' ? 'preventivas' : 'layout'}`;
-const titulo = (tipo: TipoProgramacao) => tipo === 'PREVENTIVA' ? 'Cronograma de preventivas' : 'Cronograma de layout';
+const titulo = (tipo: TipoProgramacao) => tipo === 'PREVENTIVA' ? 'Cronograma de preventivas' : 'Cronograma de alterações de layout';
 const formatarDia = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/');
 
 export function CronogramaManutencao({ tipo }: { tipo: TipoProgramacao }) {
