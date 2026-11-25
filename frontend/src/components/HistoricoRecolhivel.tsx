@@ -6,11 +6,13 @@ interface HistoricoRecolhivelProps {
   id: string;
   titulo?: string;
   children: ReactNode;
+  complemento?: ReactNode;
 }
 
 // Card "Histórico" que começa recolhido: consulta eventual, não parte do fluxo.
-export function HistoricoRecolhivel({ id, titulo = 'Histórico', children }: HistoricoRecolhivelProps) {
+export function HistoricoRecolhivel({ id, titulo = 'Histórico', children, complemento }: HistoricoRecolhivelProps) {
   const [aberto, setAberto] = useState(false);
+  const [expandidoUmaVez, setExpandidoUmaVez] = useState(false);
 
   return (
     <section className="equipamento-secao historico-card" aria-labelledby={`${id}-titulo`}>
@@ -23,13 +25,17 @@ export function HistoricoRecolhivel({ id, titulo = 'Histórico', children }: His
           aria-controls={`${id}-conteudo`}
           aria-label={aberto ? 'Recolher histórico' : 'Expandir histórico'}
           title={aberto ? 'Recolher' : 'Expandir'}
-          onClick={() => setAberto((atual) => !atual)}
+          onClick={() => {
+            setAberto((atual) => !atual);
+            setExpandidoUmaVez(true);
+          }}
         >
           <IconeChevron />
         </button>
       </div>
       <div id={`${id}-conteudo`} className="historico-conteudo" hidden={!aberto}>
         {children}
+        {expandidoUmaVez && complemento}
       </div>
     </section>
   );

@@ -689,3 +689,35 @@ describe('Manutenções', () => {
     expect(depois.some((c) => c.url.includes('/solicitacoes?'))).toBe(false);
   });
 });
+
+it('arquiva uma anotação técnica sem sair do histórico do chamado', async () => {
+  const nota = {
+    id: 'nota-1', texto: 'Conferir a instalação elétrica.', compartilhada: false, arquivadaEm: null,
+    criadoEm: '2026-10-02T13:00:00.000Z', autor: { id: '1', nome: 'Usuário Teste' },
+  };
+  const arquivadaEm = '2026-10-03T13:00:00.000Z';
+  let arquivada = false;
+  mockFetch({
+    ...entrarComo('OPERADOR', '/manutencoes/m1'),
+    '/avaliacao-tecnica/m1/anotacoes/nota-1': (init) => {
+      expect(init?.method).toBe('PATCH');
+      expect(JSON.parse(String(init?.body))).toEqual({ arquivada: true, compartilhada: true });
+      arquivada = true;
+      return { body: { ...nota, arquivadaEm, compartilhada: true } };
+    },
+    '/avaliacao-tecnica/m1/anotacoes': () => ({ body: arquivada ? [] : [nota] }),
+    '/manutencoes/m1/historico': () => ({ body: arquivada ? [{
+      id: 'anotacao-nota-1', acao: 'ANOTACAO_TECNICA_ARQUIVADA', textoAnotacao: nota.texto,
+      criadoEm: arquivadaEm, usuario: nota.autor.nome,
+    }] : [] }),
+    '/manutencoes/m1': { body: manutencao },
+    '/contratos': { body: [] },
+  });
+  render(<App />);
+  await userEvent.click(await screen.findByRole('button', { name: 'Expandir histórico' }));
+  const historico = screen.getByRole('region', { name: 'Histórico do chamado' });
+  await userEvent.click(await within(historico).findByRole('button', { name: 'Arquivar no histórico do chamado' }));
+  expect(await within(historico).findByText('Anotação técnica arquivada · acesso restrito')).toBeVisible();
+  expect(within(historico).getByText(nota.texto)).toBeVisible();
+  expect(screen.queryByRole('link', { name: 'Anotações e pareceres' })).not.toBeInTheDocument();
+});

@@ -168,3 +168,9 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+.historico-anotacoes {
+  border-top: 1px solid var(--border);
+  margin-top: 12px;
+  padding-top: 12px;
+}

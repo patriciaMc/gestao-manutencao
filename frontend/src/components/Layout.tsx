@@ -50,7 +50,7 @@ const TABS: TabDef[] = [
   { para: '/inventario', rotulo: 'Inventário', icone: <IconeInventario />, perfis: ['OPERADOR', 'UNIDADE', 'GALPAO'] },
   { para: '/solicitacoes', rotulo: 'Solicitações', icone: <IconeSolicitacoes />, perfis: ['OPERADOR', 'UNIDADE', 'GALPAO', 'TERCEIRIZADA'], permissoes: ['SOLICITACOES_GERENCIAR', 'MANUTENCAO_CONSULTAR'] },
   { para: '/avaliacao-tecnica', rotulo: 'Avaliação Técnica', icone: <IconeManutencoes />, perfis: ['OPERADOR'], permissoes: ['MANUTENCAO_AVALIAR', 'MANUTENCAO_VISTORIAR'],
-    sub: [{ para: '/avaliacao-tecnica/agenda', rotulo: 'Agenda de visitas' }, { para: '/avaliacao-tecnica/pareceres', rotulo: 'Anotações e pareceres' }] },
+    sub: [{ para: '/avaliacao-tecnica/agenda', rotulo: 'Agenda de visitas' }] },
   { para: '/programacoes', rotulo: 'Preventivas e layout', icone: <IconeManutencoes />, perfis: ['OPERADOR'], permissoes: ['MANUTENCAO_TRIAR'],
     sub: [{ para: '/programacoes/preventivas', rotulo: 'Cronograma preventivas' }, { para: '/programacoes/layout', rotulo: 'Alteração de layout' }] },
   { para: '/estoque', rotulo: 'Estoque', icone: <IconeEstoque />, perfis: ['OPERADOR', 'GALPAO'], permissoes: ['ESTOQUE_GERENCIAR'] },

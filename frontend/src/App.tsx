@@ -105,7 +105,7 @@ function RotasProtegidas() {
           <Route path="/manutencoes" element={<Navigate to="/solicitacoes?tipo=MANUTENCAO" replace />} />
           <Route path="/avaliacao-tecnica" element={<Restrita permissoes={['MANUTENCAO_CONSULTAR']}><Restrita permissoes={['MANUTENCAO_AVALIAR', 'MANUTENCAO_VISTORIAR']}><AvaliacaoTecnicaFila key="fila" visao="fila" /></Restrita></Restrita>} />
           <Route path="/avaliacao-tecnica/agenda" element={<Restrita permissoes={['MANUTENCAO_CONSULTAR']}><Restrita permissoes={['MANUTENCAO_AVALIAR', 'MANUTENCAO_VISTORIAR']}><AvaliacaoTecnicaFila key="agenda" visao="agenda" /></Restrita></Restrita>} />
-          <Route path="/avaliacao-tecnica/pareceres" element={<Restrita permissoes={['MANUTENCAO_CONSULTAR']}><Restrita permissoes={['MANUTENCAO_AVALIAR', 'MANUTENCAO_VISTORIAR']}><AvaliacaoTecnicaFila key="pareceres" visao="pareceres" /></Restrita></Restrita>} />
+          <Route path="/avaliacao-tecnica/pareceres" element={<Navigate to="/avaliacao-tecnica" replace />} />
           <Route path="/programacoes" element={<Navigate to="/programacoes/preventivas" replace />} />
           <Route path="/programacoes/preventivas" element={<Restrita permissoes={['MANUTENCAO_TRIAR']}><CronogramaManutencao key="preventiva" tipo="PREVENTIVA" /></Restrita>} />
           <Route path="/programacoes/preventivas/nova" element={<Restrita permissoes={['MANUTENCAO_TRIAR']}><NovaProgramacaoManutencao key="preventiva" tipo="PREVENTIVA" /></Restrita>} />

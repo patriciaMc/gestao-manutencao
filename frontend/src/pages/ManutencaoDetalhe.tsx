@@ -12,6 +12,7 @@ import { StatusPill } from '../components/StatusPill';
 import { CampoAnexo } from '../components/CampoAnexo';
 import { caminhoConversa } from '../utils/conversas';
 import { HistoricoTriagem } from '../components/HistoricoTriagem';
+import { AnotacoesChamado } from '../components/AnotacoesChamado';
 import { HistoricoRecolhivel } from '../components/HistoricoRecolhivel';
 import type { Contrato, EventoManutencao, Manutencao, StatusManutencao } from '../types';
 import {
@@ -836,7 +837,8 @@ function ConteudoManutencao({
           <TrajetoriaCaso manutencaoId={m.id} status={m.status} />
         </div>
 
-        <HistoricoRecolhivel id="historico-manutencao" titulo="Histórico do chamado">
+        <HistoricoRecolhivel id="historico-manutencao" titulo="Histórico do chamado"
+          complemento={podeVistoriar && <AnotacoesChamado chamadoId={m.id} aoAtualizar={onAtualizado} />}>
           {falhaHistorico && !historico ? (
             <div className="equipamento-historico-vazio" role="status">
               Não foi possível carregar o histórico.
