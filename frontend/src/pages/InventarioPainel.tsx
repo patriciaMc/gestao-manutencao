@@ -143,7 +143,7 @@ export function InventarioPainel({ filtros, selecionar, versao = 0, unidadesPain
           {semDados.length > 0 && <details><summary>Ver unidades sem itens</summary><ul>{semDados.map((unidade) => <li key={unidade.id}>{unidade.nome}</li>)}</ul></details>}
         </section>
         <RankingUnidades grupos={resumo.porUnidade} selecionar={(id) => selecionar('unidadeId', id)} />
-        <Distribuicao titulo="Itens por família / tipo" grupos={resumo.porFamilia} selecionar={(id) => selecionar('tipoEquipamentoId', id)} />
+        <Distribuicao titulo="Itens por tipo de item" grupos={resumo.porFamilia} selecionar={(id) => selecionar('tipoEquipamentoId', id)} />
       </div>
     </>}
     <p className="inventario-painel-nota">Contagem por unidade proprietária. Empréstimos mantêm a origem e não duplicam tombamentos.</p>

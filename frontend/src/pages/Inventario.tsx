@@ -341,8 +341,8 @@ export function Inventario() {
             <div className="field"><label htmlFor="inventario-categoria">Categoria</label><select id="inventario-categoria" aria-label="Filtrar por categoria" value={filtroCategoria} onChange={e => selecionarCategoria(e.target.value)}>
               <option value="">Todas as categorias</option>{categorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
             </select></div>
-            <div className="field"><label htmlFor="inventario-familia">Família / tipo de item</label><select id="inventario-familia" aria-label="Filtrar por família" value={filtroFamilia} onChange={e => setFiltroFamilia(e.target.value)}>
-              <option value="">Todas as famílias / tipos</option>{familias.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+            <div className="field"><label htmlFor="inventario-familia">Tipo de item</label><select id="inventario-familia" aria-label="Filtrar por tipo de item" value={filtroFamilia} onChange={e => setFiltroFamilia(e.target.value)}>
+              <option value="">Todos os tipos de item</option>{familias.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
             </select></div>
             <button type="button" className="btn btn-outline" onClick={limparSelecao}>Limpar seleção</button>
           </div>
