@@ -91,6 +91,7 @@ describe('Atas', () => {
   it('cadastra uma ata em página própria e volta à lista com a confirmação', async () => {
     const chamadas = mockFetch({
       ...entrarComo('OPERADOR', '/atas'),
+      '/prestadores/catalogo': { body: prestadores },
       '/atas': (init) => (init?.method === 'POST' ? { status: 201, body: {} } : { body: [] }),
       '/unidades': { body: [{ id: 'u1', nome: 'UBS Centro', tipo: 'UBSF' }] },
     });
@@ -102,9 +103,11 @@ describe('Atas', () => {
     const salvar = screen.getByRole('button', { name: 'Salvar' });
     expect(salvar).toBeDisabled();
 
-    await waitFor(() => expect(screen.getByLabelText('Fornecedor')).toBeEnabled());
+    await waitFor(() => expect(screen.getByLabelText('Fornecedor do cadastro')).toBeEnabled());
     await userEvent.type(screen.getByLabelText('Número da ata'), '099/2026');
-    await userEvent.type(screen.getByLabelText('Fornecedor'), 'MedEquip');
+    await userEvent.selectOptions(screen.getByLabelText('Fornecedor do cadastro'), 'pr1');
+    await userEvent.type(screen.getByLabelText('Processo SEI'), '2026.000099');
+    expect(screen.getByRole('option', { name: 'Tecnomed' })).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText('Valor total (R$)'), '5000');
     await userEvent.type(screen.getByLabelText('Vencimento'), '2027-01-31');
     await userEvent.click(salvar);
@@ -113,7 +116,8 @@ describe('Atas', () => {
     const post = chamadas.find((c) => c.init?.method === 'POST' && c.url.endsWith('/atas'));
     expect(JSON.parse(String(post?.init?.body))).toMatchObject({
       numero: '099/2026',
-      fornecedor: 'MedEquip',
+      prestadorId: 'pr1',
+      processoSei: '2026.000099',
       valorTotal: 5000,
       vencimento: '2027-01-31',
       unidadeEspecificaId: null,
@@ -124,6 +128,7 @@ describe('Atas', () => {
     const chamadas = mockFetch({
       ...entrarComo('OPERADOR', '/atas/a1'),
       '/atas/a1': { body: {} },
+      '/prestadores/catalogo': { body: prestadores },
       '/atas': { body: [ataAtiva] },
       '/unidades': { body: [] },
     });
@@ -132,14 +137,13 @@ describe('Atas', () => {
     const numero = await screen.findByLabelText('Número da ata');
     await waitFor(() => expect(numero).toHaveValue('045/2026'));
     expect(numero).toBeDisabled();
-    const fornecedor = screen.getByLabelText('Fornecedor');
-    await userEvent.clear(fornecedor);
-    await userEvent.type(fornecedor, 'Nova Empresa');
+    const fornecedor = screen.getByLabelText('Fornecedor do cadastro');
+    await userEvent.selectOptions(fornecedor, 'pr1');
     await userEvent.click(screen.getByRole('button', { name: 'Salvar' }));
 
     expect(await screen.findByRole('heading', { name: 'Atas' })).toBeInTheDocument();
     const patch = chamadas.find((c) => c.init?.method === 'PATCH');
-    expect(JSON.parse(String(patch?.init?.body))).toMatchObject({ fornecedor: 'Nova Empresa', valorTotal: 100000 });
+    expect(JSON.parse(String(patch?.init?.body))).toMatchObject({ prestadorId: 'pr1', valorTotal: 100000 });
   });
 
   it('só o Administrador acessa atas: Unidade não vê o menu nem a tela', async () => {

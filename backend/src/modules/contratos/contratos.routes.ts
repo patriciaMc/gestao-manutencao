@@ -40,6 +40,8 @@ contratosRouter.get('/', async (req, res) => {
   const buscaGestor: Prisma.ContratoWhereInput | undefined = busca
     ? {
         OR: [
+          { processoSei: { contains: busca, mode: 'insensitive' } },
+          { objeto: { contains: busca, mode: 'insensitive' } },
           { numero: { contains: busca, mode: 'insensitive' } },
           { prestador: { nome: { contains: busca, mode: 'insensitive' } } },
           { itens: { some: { servico: { nome: { contains: busca, mode: 'insensitive' } } } } },
@@ -66,6 +68,7 @@ contratosRouter.get('/', async (req, res) => {
   res.json(
     contratos.map((c) => ({
       ...c,
+      ...(req.usuario!.perfil === Perfil.TERCEIRIZADA ? { processoSei: undefined } : {}),
       itens: c.itens.map((i) => ({ ...i, saldo: saldoDoItem(i.valor, comprometido.get(i.id) ?? 0) })),
     })),
   );
@@ -87,6 +90,7 @@ const contratoSchema = z.object({
   numero: z.string().min(1),
   prestadorId: z.string().uuid(),
   objeto: z.string().min(2),
+  processoSei: z.string().trim().min(1).max(80).nullable().optional(),
   status: z.nativeEnum(StatusContrato).default('ATIVO'),
   vigenciaInicio: z.coerce.date(),
   vigenciaFim: z.coerce.date(),

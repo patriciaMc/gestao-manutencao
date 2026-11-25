@@ -371,6 +371,9 @@ export interface Solicitacao {
 }
 
 export interface Ata {
+  processoSei?: string | null;
+  prestadorId?: string | null;
+  prestador?: { id: string; nome: string } | null;
   id: string;
   numero: string;
   fornecedor: string;
@@ -523,6 +526,7 @@ export interface ContratoItem {
 }
 
 export interface Contrato {
+  processoSei?: string | null;
   id: string;
   numero: string;
   prestadorId: string;
@@ -543,7 +547,7 @@ export interface PrestadorServico {
   cnpj: string | null;
   telefone: string | null;
   email: string | null;
-  _count: { contratos: number };
+  _count: { contratos: number; atas?: number };
 }
 
 export interface ServicoContrato {

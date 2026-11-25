@@ -32,6 +32,29 @@ describe('Atas (UC19/UC20, RF33-RF35)', () => {
     expect(prismaMock.logAuditoria.create).toHaveBeenCalled();
   });
 
+  it('reutiliza o fornecedor de Configurações e lê o nome atualizado na ata', async () => {
+    const usuario = auth('OPERADOR', { permissoes: ['ATAS_GERENCIAR'] });
+    prismaMock.prestadorServico.findMany.mockResolvedValue([{ id: UUID, nome: 'Catálogo' }] as never);
+    expect((await request(app).get('/prestadores/catalogo').set(usuario)).body).toEqual([{ id: UUID, nome: 'Catálogo' }]);
+    expect(prismaMock.prestadorServico.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      select: { id: true, nome: true },
+    }));
+    prismaMock.prestadorServico.findUnique.mockResolvedValue({ nome: 'Catálogo' } as never);
+    prismaMock.ata.create.mockResolvedValue({ id: 'ata-1' } as never);
+    const dados = { numero: '067/2026', prestadorId: UUID, descricao: 'Equipamentos', processoSei: '2026.067',
+      valorTotal: 500, vencimento: '2027-06-30' };
+    expect((await request(app).post('/atas').set(usuario).send(dados)).status).toBe(201);
+    expect(prismaMock.ata.create.mock.calls[0][0].data).toMatchObject({
+      prestadorId: UUID, fornecedor: 'Catálogo', processoSei: '2026.067',
+    });
+    prismaMock.ata.findMany.mockResolvedValue([{
+      ...dados, fornecedor: 'Catálogo', prestador: { id: UUID, nome: 'Nome atualizado' },
+    }] as never);
+    expect((await request(app).get('/atas').set(usuario)).body[0]).toMatchObject({
+      prestadorId: UUID, fornecedor: 'Nome atualizado', processoSei: '2026.067',
+    });
+  });
+
   it('rejeita número de ata duplicado', async () => {
     prismaMock.ata.findUnique.mockResolvedValue({ id: 'ata-1' } as never);
     const res = await request(app)

@@ -57,7 +57,7 @@ export function Atas() {
   const visiveis = useMemo(() => {
     const alvo = busca.trim().toLowerCase();
     return atas.filter((a) => {
-      const buscaOk = !alvo || [a.numero, a.fornecedor].some((v) => v?.toLowerCase().includes(alvo));
+      const buscaOk = !alvo || [a.numero, a.fornecedor, a.descricao, a.processoSei].some((v) => v?.toLowerCase().includes(alvo));
       return buscaOk && (!filtro || analisarAta(a).situacao === filtro);
     });
   }, [atas, busca, filtro]);
@@ -86,6 +86,10 @@ export function Atas() {
       </div>
 
 
+      {pode(usuario, 'CONTRATOS_GERENCIAR') && <nav className="actions-row cadastros-atalhos" aria-label="Cadastros relacionados">
+        <Link className="btn btn-outline" to="/contratos">Contratos</Link>
+        <Link className="btn btn-outline" to="/configuracoes/servicos/prestadores">Fornecedores</Link>
+      </nav>}
       <div className="gestao-lista inventario-lista">
         <BarraConsulta
           pesquisa="Pesquisar e filtrar atas"
@@ -129,6 +133,7 @@ export function Atas() {
                         </Link>
                         <div className="cadastro-sub">
                           {ata.fornecedor || ata.descricao}
+                          {ata.processoSei && ` · SEI ${ata.processoSei}`}
                           {ata.unidadeEspecifica ? ` · exclusiva ${ata.unidadeEspecifica.nome}` : ''}
                         </div>
                       </td>

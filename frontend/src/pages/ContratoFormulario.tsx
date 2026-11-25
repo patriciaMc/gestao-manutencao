@@ -25,6 +25,7 @@ const VAZIO = {
   numero: '',
   prestadorId: '',
   objeto: '',
+  processoSei: '',
   vigenciaInicio: '',
   vigenciaFim: '',
   status: 'ATIVO',
@@ -98,6 +99,7 @@ export function ContratoFormulario() {
           numero: c.numero,
           prestadorId: c.prestadorId,
           objeto: c.objeto,
+          processoSei: c.processoSei ?? '',
           vigenciaInicio: c.vigenciaInicio.slice(0, 10),
           vigenciaFim: c.vigenciaFim.slice(0, 10),
           status: c.status,
@@ -167,6 +169,7 @@ export function ContratoFormulario() {
       numero: form.numero,
       prestadorId: form.prestadorId,
       objeto: form.objeto,
+      ...(form.processoSei.trim() !== inicial.processoSei && { processoSei: form.processoSei.trim() || null }),
       vigenciaInicio: form.vigenciaInicio,
       vigenciaFim: form.vigenciaFim,
       status: form.status,
@@ -252,6 +255,11 @@ export function ContratoFormulario() {
                 required
               />
             </div>
+            {usuario?.perfil !== 'TERCEIRIZADA' && <div className="field">
+              <label htmlFor="ct-processo-sei">Processo SEI</label>
+              <input id="ct-processo-sei" value={form.processoSei} maxLength={80} disabled={bloqueado}
+                onChange={(e) => setForm({ ...form, processoSei: e.target.value })} />
+            </div>}
             <div className="field">
               <label htmlFor="ct-prestador">Prestador de serviço</label>
               <select

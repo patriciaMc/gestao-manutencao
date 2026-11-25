@@ -29,3 +29,8 @@
 
 /* Usuários: ícone ao lado do nome para entrar como aquele usuário */
 .usuario-nome-linha { display: flex; align-items: center; gap: 6px; }
+
+.cadastros-atalhos {
+  margin: 0 0 12px;
+  justify-content: flex-start;
+}

@@ -625,6 +625,7 @@ model PrestadorServico {
   criadoEm DateTime @default(now()) @map("criado_em")
 
   contratos Contrato[]
+  atas      Ata[]
   usuarios  Usuario[]
 
   @@map("prestador_servico")
@@ -652,6 +653,7 @@ model Contrato {
   prestadorId    String           @map("prestador_id")
   prestador      PrestadorServico @relation(fields: [prestadorId], references: [id])
   objeto         String
+  processoSei    String?          @map("processo_sei")
   // Soma dos valores dos itens, recalculada pelo servidor a cada gravação.
   // Contratos antigos, sem itens, mantêm o valor que já tinham.
   valorTotal     Decimal?         @map("valor_total") @db.Decimal(14, 2)
@@ -691,6 +693,9 @@ model Ata {
   id                  String   @id @default(uuid())
   numero              String   @unique
   fornecedor          String   @default("")
+  prestadorId         String?  @map("prestador_id")
+  prestador           PrestadorServico? @relation(fields: [prestadorId], references: [id], onDelete: Restrict)
+  processoSei         String?  @map("processo_sei")
   descricao           String
   valorTotal          Decimal  @map("valor_total") @db.Decimal(14, 2)
   // RN09: saldo nunca pode ficar negativo
@@ -704,6 +709,7 @@ model Ata {
 
   solicitacoes Solicitacao[]
 
+  @@index([prestadorId])
   @@map("ata")
 }
 

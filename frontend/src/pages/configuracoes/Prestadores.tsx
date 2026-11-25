@@ -46,6 +46,7 @@ export function Prestadores() {
         { titulo: 'CNPJ', celula: (p) => p.cnpj ?? '—' },
         { titulo: 'Contato', celula: (p) => [p.telefone, p.email].filter(Boolean).join(' · ') || '—', larga: true },
         { titulo: 'Contratos', celula: (p) => p._count.contratos },
+        { titulo: 'Atas', celula: (p) => p._count.atas ?? 0 },
       ]}
     />
   );

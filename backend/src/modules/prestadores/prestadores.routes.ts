@@ -12,10 +12,14 @@ export const prestadoresRouter = Router();
 
 prestadoresRouter.use(autenticar);
 
+prestadoresRouter.get('/catalogo', permitirCom(['CONTRATOS_GERENCIAR', 'ATAS_GERENCIAR']), async (_req, res) => {
+  res.json(await prisma.prestadorServico.findMany({ orderBy: { nome: 'asc' }, select: { id: true, nome: true } }));
+});
+
 prestadoresRouter.get('/', permitirCom('CONTRATOS_GERENCIAR'), async (_req, res) => {
   const prestadores = await prisma.prestadorServico.findMany({
     orderBy: { nome: 'asc' },
-    include: { _count: { select: { contratos: true } } },
+    include: { _count: { select: { contratos: true, atas: true } } },
   });
   res.json(prestadores);
 });
@@ -86,6 +90,8 @@ prestadoresRouter.delete('/:id', permitirCom('CONTRATOS_GERENCIAR'), async (req,
   if (prestador._count.contratos > 0) {
     throw new AppError('O prestador possui contratos vinculados e não pode ser excluído.', 422);
   }
+  const ata = await prisma.ata.findFirst({ where: { prestadorId: prestador.id }, select: { id: true } });
+  if (ata) throw new AppError('O fornecedor está vinculado a uma ata e não pode ser excluído.', 422);
   await prisma.prestadorServico.delete({ where: { id: prestador.id } });
   await registrarAuditoria({
     usuarioId: req.usuario!.sub,

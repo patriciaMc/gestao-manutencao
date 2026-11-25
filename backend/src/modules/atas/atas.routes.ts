@@ -10,12 +10,24 @@ import { registrarAuditoria } from '../../services/auditoria.service';
 
 // UC19/UC20/RF33-35 — controle de atas de registro de preços
 export const atasRouter = Router();
+const vinculoPrestador = { prestador: { select: { id: true, nome: true } } } as const;
+
+function comFornecedor<T extends { fornecedor: string; prestador?: { nome: string } | null }>(ata: T) {
+  return { ...ata, fornecedor: ata.prestador?.nome ?? ata.fornecedor };
+}
+
+async function nomeDoPrestador(id: string) {
+  const prestador = await prisma.prestadorServico.findUnique({ where: { id }, select: { nome: true } });
+  if (!prestador) throw new AppError('Selecione um fornecedor do cadastro.', 422);
+  return prestador.nome;
+}
 
 atasRouter.use(autenticar, permitirCom('ATAS_GERENCIAR', Perfil.GALPAO));
 
 atasRouter.get('/', async (_req, res) => {
   const atas = await prisma.ata.findMany({
     include: {
+      ...vinculoPrestador,
       unidadeEspecifica: { select: { id: true, nome: true } },
       solicitacoes: {
         select: { id: true, status: true, valorVinculado: true, criadoEm: true },
@@ -23,7 +35,7 @@ atasRouter.get('/', async (_req, res) => {
     },
     orderBy: { vencimento: 'asc' },
   });
-  res.json(atas);
+  res.json(atas.map(comFornecedor));
 });
 
 // RF35 — alertas: vencimento em até 30 dias ou saldo < 10% do total
@@ -66,13 +78,15 @@ atasRouter.get('/alertas', async (_req, res) => {
 
 const ataSchema = z.object({
   numero: z.string().min(1),
-  fornecedor: z.string().min(2, 'informe o fornecedor'),
+  fornecedor: z.string().trim().min(2, 'informe o fornecedor').optional(),
+  prestadorId: z.string().uuid().optional(),
+  processoSei: z.string().trim().min(1).max(80).nullable().optional(),
   descricao: z.string().min(2),
   valorTotal: z.number().positive(),
   saldo: z.number().nonnegative().optional(),
   vencimento: z.coerce.date(),
   unidadeEspecificaId: z.string().uuid().nullable().optional(),
-});
+}).refine((dados) => Boolean(dados.prestadorId || dados.fornecedor), 'Informe o fornecedor.');
 
 atasRouter.post(
   '/',
@@ -81,10 +95,13 @@ atasRouter.post(
   async (req, res) => {
     const existe = await prisma.ata.findUnique({ where: { numero: req.body.numero } });
     if (existe) throw new AppError('Já existe ata com este número.', 409);
+    const fornecedor = req.body.prestadorId ? await nomeDoPrestador(req.body.prestadorId) : req.body.fornecedor;
     const ata = await prisma.ata.create({
       data: {
         numero: req.body.numero,
-        fornecedor: req.body.fornecedor,
+        fornecedor,
+        ...(req.body.prestadorId && { prestadorId: req.body.prestadorId }),
+        ...(req.body.processoSei !== undefined && { processoSei: req.body.processoSei }),
         descricao: req.body.descricao,
         valorTotal: req.body.valorTotal,
         saldo: req.body.saldo ?? req.body.valorTotal,
@@ -108,7 +125,9 @@ atasRouter.patch(
   permitirCom('ATAS_GERENCIAR'),
   validarBody(
     z.object({
-      fornecedor: z.string().min(2).optional(),
+      fornecedor: z.string().trim().min(2).optional(),
+      prestadorId: z.string().uuid().optional(),
+      processoSei: z.string().trim().min(1).max(80).nullable().optional(),
       descricao: z.string().min(2).optional(),
       valorTotal: z.number().positive().optional(),
       saldo: z.number().nonnegative().optional(),
@@ -120,15 +139,18 @@ atasRouter.patch(
   async (req, res) => {
     const antes = await prisma.ata.findUnique({ where: { id: req.params.id } });
     if (!antes) throw new AppError('Ata não encontrada.', 404);
-    const ata = await prisma.ata.update({ where: { id: req.params.id }, data: req.body });
+    const dados = { ...req.body };
+    if (dados.prestadorId) dados.fornecedor = await nomeDoPrestador(dados.prestadorId);
+    else if (antes.prestadorId) delete dados.fornecedor;
+    const ata = await prisma.ata.update({ where: { id: req.params.id }, data: dados, include: vinculoPrestador });
     await registrarAuditoria({
       usuarioId: req.usuario!.sub,
       acao: 'ATUALIZAR_ATA',
       entidade: 'ata',
       entidadeId: ata.id,
       dadosAntes: { saldo: antes.saldo, vencimento: antes.vencimento, ativo: antes.ativo },
-      dadosDepois: req.body,
+      dadosDepois: dados,
     });
-    res.json(ata);
+    res.json(comFornecedor(ata));
   },
 );

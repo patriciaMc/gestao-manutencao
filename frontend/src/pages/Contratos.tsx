@@ -59,7 +59,7 @@ export function Contratos() {
     return contratos.filter((c) => {
       const buscaOk =
         !alvo ||
-        c.numero.toLowerCase().includes(alvo) ||
+        [c.numero, c.processoSei, c.objeto].some((valor) => valor?.toLowerCase().includes(alvo)) ||
         c.prestador.nome.toLowerCase().includes(alvo) ||
         c.itens.some((i) => i.servico.nome.toLowerCase().includes(alvo));
       return buscaOk && (!filtro || c.status === filtro);
@@ -92,6 +92,13 @@ export function Contratos() {
       </div>
 
 
+      {usuario?.perfil === 'OPERADOR' && <nav className="actions-row cadastros-atalhos" aria-label="Cadastros relacionados">
+        {pode(usuario, 'ATAS_GERENCIAR') && <Link className="btn btn-outline" to="/atas">Atas</Link>}
+        {!somenteLeitura && <>
+          <Link className="btn btn-outline" to="/configuracoes/servicos/prestadores">Fornecedores</Link>
+          <Link className="btn btn-outline" to="/configuracoes/servicos/tipos">Serviços de contrato</Link>
+        </>}
+      </nav>}
       <div className="gestao-lista inventario-lista">
         <BarraConsulta
           pesquisa="Pesquisar e filtrar contratos"
@@ -134,6 +141,7 @@ export function Contratos() {
                           {c.numero}
                         </Link>
                         <div className="cadastro-sub">{c.prestador.nome}</div>
+                        {c.processoSei && <div className="cadastro-sub">SEI {c.processoSei}</div>}
                       </td>
                       <td className="inventario-data cartao-valor" data-label="Valor total">
                         {a.valorTotal === null ? '—' : formatarMoeda(a.valorTotal)}

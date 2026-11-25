@@ -1,6 +1,6 @@
 import { pode } from '../utils/permissoes';
 import { FormEvent, useEffect, useState } from 'react';
-import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useMensagemTemporaria } from '../hooks/useMensagemTemporaria';
@@ -8,7 +8,7 @@ import type { Ata, Unidade } from '../types';
 import { semAlteracoes } from '../utils/form';
 import { useAlertaNativo } from '../hooks/useAlertaNativo';
 
-const VAZIO = { numero: '', fornecedor: '', valorTotal: '', vencimento: '', unidadeEspecificaId: '' };
+const VAZIO = { numero: '', fornecedor: '', prestadorId: '', processoSei: '', descricao: '', valorTotal: '', vencimento: '', unidadeEspecificaId: '' };
 
 // Cadastro e edição de ata em página própria (mesmo padrão dos demais cadastros).
 export function AtaFormulario() {
@@ -19,6 +19,7 @@ export function AtaFormulario() {
   const location = useLocation();
   const permitido = pode(usuario, 'ATAS_GERENCIAR');
   const [unidades, setUnidades] = useState<Unidade[]>([]);
+  const [prestadores, setPrestadores] = useState<Array<{ id: string; nome: string }>>([]);
   const [ata, setAta] = useState<Ata | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [falha, setFalha] = useState<string | null>(null);
@@ -31,10 +32,15 @@ export function AtaFormulario() {
   useEffect(() => {
     if (!permitido) return;
     let ativo = true;
-    Promise.all([api.get<Unidade[]>('/unidades'), editando ? api.get<Ata[]>('/atas') : Promise.resolve([] as Ata[])])
-      .then(([listaUnidades, atas]) => {
+    Promise.all([
+      api.get<Unidade[]>('/unidades'),
+      editando ? api.get<Ata[]>('/atas') : Promise.resolve([] as Ata[]),
+      api.get<Array<{ id: string; nome: string }>>('/prestadores/catalogo'),
+    ])
+      .then(([listaUnidades, atas, catalogo]) => {
         if (!ativo) return;
         setUnidades(listaUnidades);
+        setPrestadores(catalogo);
         if (editando) {
           const encontrada = atas.find((a) => a.id === id);
           if (!encontrada) {
@@ -44,6 +50,9 @@ export function AtaFormulario() {
           const valores = {
             numero: encontrada.numero,
             fornecedor: encontrada.fornecedor ?? '',
+            prestadorId: encontrada.prestadorId ?? '',
+            processoSei: encontrada.processoSei ?? '',
+            descricao: encontrada.descricao,
             valorTotal: String(encontrada.valorTotal),
             vencimento: encontrada.vencimento.slice(0, 10),
             unidadeEspecificaId: encontrada.unidadeEspecifica?.id ?? '',
@@ -77,23 +86,17 @@ export function AtaFormulario() {
     setErro(null);
     setEnviando(true);
     try {
-      if (ata) {
-        await api.patch(`/atas/${ata.id}`, {
-          fornecedor: form.fornecedor,
-          valorTotal: Number(form.valorTotal),
-          vencimento: form.vencimento,
-          unidadeEspecificaId: form.unidadeEspecificaId || null,
-        });
-      } else {
-        await api.post('/atas', {
-          numero: form.numero,
-          fornecedor: form.fornecedor,
-          descricao: `Ata de registro de preços — ${form.fornecedor}`,
-          valorTotal: Number(form.valorTotal),
-          vencimento: form.vencimento,
-          unidadeEspecificaId: form.unidadeEspecificaId || null,
-        });
-      }
+      const fornecedor = prestadores.find((item) => item.id === form.prestadorId);
+      const dados = {
+        ...(fornecedor ? { prestadorId: fornecedor.id } : { fornecedor: form.fornecedor.trim() }),
+        descricao: form.descricao.trim() || `Ata de registro de preços — ${fornecedor?.nome ?? form.fornecedor}`,
+        ...(form.processoSei.trim() !== inicial.processoSei && { processoSei: form.processoSei.trim() || null }),
+        valorTotal: Number(form.valorTotal),
+        vencimento: form.vencimento,
+        unidadeEspecificaId: form.unidadeEspecificaId || null,
+      };
+      if (ata) await api.patch(`/atas/${ata.id}`, dados);
+      else await api.post('/atas', { ...dados, numero: form.numero });
       void navigate('/atas', { replace: true });
     } catch (err) {
       setErro(err instanceof Error ? err.message : 'Erro ao salvar a ata.');
@@ -143,14 +146,25 @@ export function AtaFormulario() {
               />
             </div>
             <div className="field">
-              <label htmlFor="ata-fornecedor">Fornecedor</label>
-              <input
-                id="ata-fornecedor"
-                value={form.fornecedor}
-                onChange={(e) => setForm({ ...form, fornecedor: e.target.value })}
-                disabled={bloqueado}
-                required
-              />
+              <label htmlFor="ata-fornecedor">Fornecedor do cadastro</label>
+              <select id="ata-fornecedor" value={form.prestadorId} required={!ata} disabled={bloqueado}
+                onChange={(e) => setForm({ ...form, prestadorId: e.target.value })}>
+                <option value="" disabled={Boolean(ata?.prestadorId)}>
+                  {ata && !ata.prestadorId ? form.fornecedor || 'Fornecedor sem vínculo' : 'Selecione um fornecedor'}
+                </option>
+                {prestadores.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}
+              </select>
+              {pode(usuario, 'CONTRATOS_GERENCIAR') && <Link to="/configuracoes/servicos/prestadores">Gerenciar fornecedores</Link>}
+            </div>
+            <div className="field">
+              <label htmlFor="ata-processo-sei">Processo SEI</label>
+              <input id="ata-processo-sei" maxLength={80} value={form.processoSei} disabled={bloqueado}
+                onChange={(e) => setForm({ ...form, processoSei: e.target.value })} />
+            </div>
+            <div className="field novo-equipamento-largura-total">
+              <label htmlFor="ata-descricao">Descrição</label>
+              <textarea id="ata-descricao" rows={2} value={form.descricao} disabled={bloqueado}
+                onChange={(e) => setForm({ ...form, descricao: e.target.value })} />
             </div>
             <div className="field">
               <label htmlFor="ata-valor">Valor total (R$)</label>
