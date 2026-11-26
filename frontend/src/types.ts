@@ -235,6 +235,7 @@ export interface EventoManutencao {
 }
 
 export interface Manutencao {
+  semCoberturaContrato?: boolean;
   id: string;
   numero: number;
   tipo: TipoManutencao;
@@ -515,6 +516,11 @@ export interface RelatorioCessoes {
 export type StatusContrato = 'ATIVO' | 'RENOVACAO_PENDENTE' | 'EXPIRADO';
 
 export interface ContratoItem {
+  modalidade?: TipoManutencao | null;
+  categoriaCivilId?: string | null;
+  categoriaEquipamentoId?: string | null;
+  categoriaCivil?: { id: string; nome: string } | null;
+  categoriaEquipamento?: { id: string; nome: string } | null;
   id: string;
   servicoId: string;
   valor: string;

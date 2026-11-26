@@ -17,6 +17,7 @@ import { Estoque } from './pages/Estoque';
 import { Atas } from './pages/Atas';
 import { AtaFormulario } from './pages/AtaFormulario';
 import { Contratos } from './pages/Contratos';
+import { ContratoFinanceiro } from './pages/ContratoFinanceiro';
 import { ContratoFormulario } from './pages/ContratoFormulario';
 import { MovimentacaoEstoque } from './pages/MovimentacaoEstoque';
 import { Conversas, ConversaPagina } from './pages/conversas/Conversas';
@@ -155,8 +156,9 @@ function RotasProtegidas() {
           <Route path="/atas/nova" element={<RotaRestrita perfis={['OPERADOR']} permissoes={['ATAS_GERENCIAR']}><AtaFormulario /></RotaRestrita>} />
           <Route path="/atas/:id" element={<RotaRestrita perfis={['OPERADOR']} permissoes={['ATAS_GERENCIAR']}><AtaFormulario /></RotaRestrita>} />
           <Route path="/contratos" element={<RotaRestrita perfis={['OPERADOR', 'TERCEIRIZADA']} permissoes={['CONTRATOS_GERENCIAR', 'MANUTENCAO_CONSULTAR']}><Contratos /></RotaRestrita>} />
-          <Route path="/contratos/novo" element={<RotaRestrita perfis={['OPERADOR', 'TERCEIRIZADA']} permissoes={['CONTRATOS_GERENCIAR', 'MANUTENCAO_CONSULTAR']}><ContratoFormulario /></RotaRestrita>} />
-          <Route path="/contratos/:id" element={<RotaRestrita perfis={['OPERADOR', 'TERCEIRIZADA']} permissoes={['CONTRATOS_GERENCIAR', 'MANUTENCAO_CONSULTAR']}><ContratoFormulario /></RotaRestrita>} />
+          <Route path="/contratos/novo" element={<RotaRestrita perfis={['OPERADOR', 'TERCEIRIZADA']} permissoes={['CONTRATOS_GERENCIAR', 'MANUTENCAO_CONSULTAR', 'MANUTENCAO_FISCALIZAR', 'CONTRATOS_FINANCEIRO_CONSULTAR']}><ContratoFormulario /></RotaRestrita>} />
+          <Route path="/contratos/:id/financeiro" element={<Restrita permissoes={['CONTRATOS_GERENCIAR', 'MANUTENCAO_FISCALIZAR', 'CONTRATOS_FINANCEIRO_CONSULTAR']}><ContratoFinanceiro /></Restrita>} />
+          <Route path="/contratos/:id" element={<RotaRestrita perfis={['OPERADOR', 'TERCEIRIZADA']} permissoes={['CONTRATOS_GERENCIAR', 'MANUTENCAO_CONSULTAR', 'MANUTENCAO_FISCALIZAR', 'CONTRATOS_FINANCEIRO_CONSULTAR']}><ContratoFormulario /></RotaRestrita>} />
           <Route path="/usuarios" element={<Navigate to="/configuracoes/usuarios" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

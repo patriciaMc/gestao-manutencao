@@ -101,6 +101,30 @@ export async function listar(
   });
 }
 
+export async function sinalizarCobertura(usuario: AuthPayload, chamados: Awaited<ReturnType<typeof listar>>) {
+  if (usuario.perfil !== 'OPERADOR' || !usuario.permissoes.includes('MANUTENCAO_TRIAR')) return chamados;
+  const candidatos = new Map(chamados.flatMap((chamado) => {
+    if (chamado.status !== 'PENDENTE_APROVACAO' && chamado.status !== 'AVALIADO') return [];
+    const categoria = chamado.tipo === 'CIVIL' ? chamado.categoriaCivilId : chamado.equipamento?.tipoEquipamento?.categoriaId;
+    return categoria ? [[chamado.id, `${chamado.tipo}:${categoria}`] as const] : [];
+  }));
+  if (!candidatos.size) return chamados;
+  const dia = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+  const hoje = new Date(`${dia}T00:00:00Z`);
+  const itens = await prisma.contratoItem.findMany({
+    where: {
+      modalidade: { not: null },
+      contrato: { ativo: true, status: { not: 'EXPIRADO' }, vigenciaInicio: { lte: hoje }, vigenciaFim: { gte: hoje } },
+    },
+    select: { modalidade: true, categoriaCivilId: true, categoriaEquipamentoId: true },
+  });
+  const chaves = new Set(itens.map((item) => `${item.modalidade}:${item.categoriaCivilId ?? item.categoriaEquipamentoId}`));
+  return chamados.map((chamado) => {
+    const chave = candidatos.get(chamado.id);
+    return chave ? { ...chamado, semCoberturaContrato: !chaves.has(chave) } : chamado;
+  });
+}
+
 export async function buscarPorId(usuario: AuthPayload, id: string) {
   const manutencao = await prisma.manutencao.findUnique({
     where: { id },

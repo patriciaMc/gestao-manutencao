@@ -1,6 +1,6 @@
 import { pode } from '../utils/permissoes';
 import { CSSProperties, FormEvent, useEffect, useState } from 'react';
-import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useMensagemTemporaria } from '../hooks/useMensagemTemporaria';
@@ -17,6 +17,9 @@ interface ItemForm {
   descontoPercentual: string;
   // Só para itens já gravados: valor menos o já comprometido pelas manutenções
   saldo?: number;
+  modalidade?: 'CIVIL' | 'EQUIPAMENTO' | '';
+  categoriaId?: string;
+  nomeCategoria?: string;
 }
 
 const ITEM_VAZIO: ItemForm = { servicoId: '', valor: '', descontoPercentual: '0' };
@@ -29,6 +32,7 @@ const VAZIO = {
   vigenciaInicio: '',
   vigenciaFim: '',
   status: 'ATIVO',
+  ativo: true,
   itens: [{ ...ITEM_VAZIO }] as ItemForm[],
 };
 
@@ -60,6 +64,16 @@ export function ContratoFormulario() {
   const [form, setForm] = useState(VAZIO);
   const [prestadores, setPrestadores] = useState<PrestadorServico[]>([]);
   const [servicos, setServicos] = useState<ServicoContrato[]>([]);
+  const [categorias, setCategorias] = useState<{ CIVIL: Array<{ id: string; nome: string }>; EQUIPAMENTO: Array<{ id: string; nome: string }> } | null>(null);
+  const precisaCategorias = form.itens.some((item) => item.modalidade);
+  useEffect(() => {
+    if (!podeGerenciar || !precisaCategorias || categorias) return;
+    let ativo = true;
+    Promise.all([api.get<Array<{ id: string; nome: string }>>('/categorias-civis'), api.get<Array<{ id: string; nome: string }>>('/categorias')])
+      .then(([CIVIL, EQUIPAMENTO]) => { if (ativo) setCategorias({ CIVIL, EQUIPAMENTO }); })
+      .catch(() => { if (ativo) setCatalogosFalha(true); });
+    return () => { ativo = false; };
+  }, [podeGerenciar, precisaCategorias, categorias]);
   const [catalogosFalha, setCatalogosFalha] = useState(false);
 
   useEffect(() => {
@@ -95,7 +109,7 @@ export function ContratoFormulario() {
           setFalha('Contrato não encontrado.');
           return;
         }
-        const valores = {
+        const valores: typeof VAZIO = {
           numero: c.numero,
           prestadorId: c.prestadorId,
           objeto: c.objeto,
@@ -103,12 +117,16 @@ export function ContratoFormulario() {
           vigenciaInicio: c.vigenciaInicio.slice(0, 10),
           vigenciaFim: c.vigenciaFim.slice(0, 10),
           status: c.status,
+          ativo: c.ativo !== false,
           // Contrato antigo, sem itens, abre sem linhas até que o gestor os informe
           itens: c.itens.map((i) => ({
             servicoId: i.servicoId,
             valor: String(i.valor),
             descontoPercentual: String(Number(i.descontoPercentual ?? 0)),
             saldo: i.saldo,
+            modalidade: i.modalidade ?? '',
+            categoriaId: i.categoriaCivilId ?? i.categoriaEquipamentoId ?? '',
+            nomeCategoria: i.categoriaCivil?.nome ?? i.categoriaEquipamento?.nome,
           })),
         };
         setContrato(c);
@@ -173,10 +191,13 @@ export function ContratoFormulario() {
       vigenciaInicio: form.vigenciaInicio,
       vigenciaFim: form.vigenciaFim,
       status: form.status,
+      ...(editando && form.ativo !== inicial.ativo && { ativo: form.ativo }),
       itens: form.itens.map((i) => ({
         servicoId: i.servicoId,
         valor: Number(i.valor),
         descontoPercentual: Number(i.descontoPercentual) || 0,
+        ...((i.modalidade || inicial.itens.some((item) => item.servicoId === i.servicoId && item.modalidade))
+          && { modalidade: i.modalidade || null, categoriaId: i.categoriaId || null }),
       })),
     };
     try {
@@ -216,6 +237,9 @@ export function ContratoFormulario() {
           <h2 id="contrato-titulo">{editando ? `Contrato ${contrato?.numero ?? ''}`.trim() : 'Novo contrato'}</h2>
         </div>
         <div className="novo-equipamento-acoes">
+          {contrato && pode(usuario, 'CONTRATOS_GERENCIAR', 'MANUTENCAO_FISCALIZAR', 'CONTRATOS_FINANCEIRO_CONSULTAR') && (
+            <Link className="btn btn-outline" to={`/contratos/${contrato.id}/financeiro`}>Empenhos e aditivos</Link>
+          )}
           {editando && podeExcluir && contrato && (
             <button type="button" className="btn btn-outline" disabled={enviando} onClick={excluir}>
               Excluir
@@ -292,6 +316,10 @@ export function ContratoFormulario() {
                 ))}
               </select>
             </div>
+            {editando && <label className="checkbox-linha">
+              <input type="checkbox" checked={form.ativo} disabled={bloqueado}
+                onChange={(e) => setForm({ ...form, ativo: e.target.checked })} /> Contrato habilitado para uso
+            </label>}
             <div className="field novo-equipamento-largura-total">
               <label htmlFor="ct-objeto">Descrição</label>
               <textarea
@@ -421,6 +449,25 @@ export function ContratoFormulario() {
                     <span />
                   )}
                 </div>
+                {(!somenteLeitura || item.modalidade) && <div className="actions-row" style={{ gridColumn: '1 / -1', justifyContent: 'flex-start' }}>
+                  <label className="field">Modalidade
+                    <select value={item.modalidade ?? ''} disabled={bloqueado}
+                      onChange={(e) => editarItem(i, { modalidade: e.target.value as ItemForm['modalidade'], categoriaId: '', nomeCategoria: undefined })}>
+                      <option value="">Sem classificação</option>
+                      <option value="CIVIL">Civil</option>
+                      <option value="EQUIPAMENTO">Equipamentos</option>
+                    </select>
+                  </label>
+                  {item.modalidade && <label className="field">Categoria do item
+                    <select value={item.categoriaId ?? ''} required disabled={bloqueado}
+                      onChange={(e) => editarItem(i, { categoriaId: e.target.value })}>
+                      <option value="">Selecione</option>
+                      {item.categoriaId && !categorias?.[item.modalidade].some((categoria) => categoria.id === item.categoriaId) &&
+                        <option value={item.categoriaId}>{item.nomeCategoria ?? 'Categoria vinculada'}</option>}
+                      {categorias?.[item.modalidade].map((categoria) => <option key={categoria.id} value={categoria.id}>{categoria.nome}</option>)}
+                    </select>
+                  </label>}
+                </div>}
               </div>
             ))}
           </div>

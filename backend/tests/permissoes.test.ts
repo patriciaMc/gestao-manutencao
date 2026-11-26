@@ -43,7 +43,7 @@ describe('Permissões do Operador', () => {
     prismaMock.manutencao.findMany.mockResolvedValue([] as never);
     mockUsuarioFindFirst(prismaMock.usuario.findFirst);
     // Leitura de contratos também vale para quem consulta chamados (para triar, avaliar e escolher o item do contrato)
-    const tambem: Record<string, string[]> = { '/contratos': ['MANUTENCAO_CONSULTAR', 'MANUTENCAO_AVALIAR'] };
+    const tambem: Record<string, string[]> = { '/contratos': ['MANUTENCAO_CONSULTAR', 'MANUTENCAO_AVALIAR', 'MANUTENCAO_FISCALIZAR', 'CONTRATOS_FINANCEIRO_CONSULTAR'] };
     const casos: Array<[string, string]> = [
       ['/atas', 'ATAS_GERENCIAR'],
       ['/contratos', 'CONTRATOS_GERENCIAR'],

@@ -55,7 +55,7 @@ const TABS: TabDef[] = [
     sub: [{ para: '/programacoes/preventivas', rotulo: 'Cronograma preventivas' }, { para: '/programacoes/layout', rotulo: 'Alteração de layout' }] },
   { para: '/estoque', rotulo: 'Estoque', icone: <IconeEstoque />, perfis: ['OPERADOR', 'GALPAO'], permissoes: ['ESTOQUE_GERENCIAR'] },
   { para: '/atas', rotulo: 'Atas', icone: <IconeAtas />, perfis: ['OPERADOR'], permissoes: ['ATAS_GERENCIAR'] },
-  { para: '/contratos', rotulo: 'Contratos', icone: <IconeContratos />, perfis: ['OPERADOR', 'TERCEIRIZADA'], permissoes: ['CONTRATOS_GERENCIAR', 'MANUTENCAO_CONSULTAR'] },
+  { para: '/contratos', rotulo: 'Contratos', icone: <IconeContratos />, perfis: ['OPERADOR', 'TERCEIRIZADA'], permissoes: ['CONTRATOS_GERENCIAR', 'MANUTENCAO_CONSULTAR', 'MANUTENCAO_FISCALIZAR', 'CONTRATOS_FINANCEIRO_CONSULTAR'] },
   {
     para: '/relatorios',
     rotulo: 'Relatórios',

@@ -21,7 +21,7 @@ const VISUALIZACOES = [
 export function Contratos() {
   const { usuario } = useAuth();
   const permitido =
-    pode(usuario, 'CONTRATOS_GERENCIAR', 'MANUTENCAO_CONSULTAR') || usuario?.perfil === 'TERCEIRIZADA';
+    pode(usuario, 'CONTRATOS_GERENCIAR', 'MANUTENCAO_CONSULTAR', 'MANUTENCAO_FISCALIZAR', 'CONTRATOS_FINANCEIRO_CONSULTAR') || usuario?.perfil === 'TERCEIRIZADA';
   // A terceirizada consulta os contratos do próprio prestador, sem cadastrar nem editar
   const somenteLeitura = usuario?.perfil === 'TERCEIRIZADA' || (usuario?.perfil === 'OPERADOR' && !pode(usuario, 'CONTRATOS_GERENCIAR'));
   const [contratos, setContratos] = useState<Contrato[]>([]);

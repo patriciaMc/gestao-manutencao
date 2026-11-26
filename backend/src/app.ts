@@ -12,6 +12,7 @@ import { manutencoesRouter } from './modules/manutencoes/manutencoes.routes';
 import { solicitacoesRouter } from './modules/solicitacoes/solicitacoes.routes';
 import { atasRouter } from './modules/atas/atas.routes';
 import { sinapiRouter } from './modules/sinapi/sinapi.routes';
+import { financeiroContratoRouter } from './modules/contratos/financeiro.routes';
 import { contratosRouter } from './modules/contratos/contratos.routes';
 import { prestadoresRouter } from './modules/prestadores/prestadores.routes';
 import { setoresRouter } from './modules/setores/setores.routes';
@@ -96,6 +97,7 @@ export function criarApp() {
   app.use('/manutencoes/:id/mensagens', criarMensagensRouter('manutencao'));
   app.use('/solicitacoes', solicitacoesRouter);
   app.use('/atas', atasRouter);
+  app.use('/contratos', financeiroContratoRouter);
   app.use('/contratos', contratosRouter);
   app.use('/sinapi', sinapiRouter);
   app.use('/prestadores', prestadoresRouter);

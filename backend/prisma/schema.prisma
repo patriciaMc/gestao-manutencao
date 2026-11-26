@@ -279,6 +279,8 @@ model Categoria {
 
   tipos TipoEquipamento[]
 
+  itensContrato ContratoItem[]
+
   @@map("categoria")
 }
 
@@ -666,8 +668,22 @@ model Contrato {
   itens       ContratoItem[]
   manutencoes Manutencao[]
 
+  movimentos ContratoMovimento[]
+
   @@index([prestadorId])
   @@map("contrato")
+}
+
+model ContratoMovimento {
+  id         String   @id @default(uuid())
+  contratoId String   @map("contrato_id")
+  contrato   Contrato @relation(fields: [contratoId], references: [id], onDelete: Restrict)
+  dados      Json
+  ordem      BigInt   @default(autoincrement())
+  criadoEm   DateTime @default(now()) @map("criado_em")
+
+  @@index([contratoId, ordem])
+  @@map("contrato_movimento")
 }
 
 // Serviço contratado, com valor próprio e tipo de manutenção.
@@ -681,6 +697,12 @@ model ContratoItem {
   // Desconto da proposta vencedora sobre a tabela SINAPI; vale para os chamados civis encaminhados a este item
   descontoPercentual Decimal         @default(0) @map("desconto_percentual") @db.Decimal(5, 2)
   criadoEm           DateTime        @default(now()) @map("criado_em")
+
+  modalidade             TipoManutencao?
+  categoriaCivilId       String? @map("categoria_civil_id")
+  categoriaCivil         CategoriaCivil? @relation(fields: [categoriaCivilId], references: [id], onDelete: Restrict)
+  categoriaEquipamentoId String? @map("categoria_equipamento_id")
+  categoriaEquipamento   Categoria? @relation(fields: [categoriaEquipamentoId], references: [id], onDelete: Restrict)
 
   manutencoes Manutencao[]
 
@@ -852,6 +874,8 @@ model CategoriaCivil {
   criadoEm    DateTime            @default(now()) @map("criado_em")
   perguntas   PerguntaCategoria[]
   manutencoes Manutencao[]
+
+  itensContrato ContratoItem[]
 
   @@map("categoria_civil")
 }

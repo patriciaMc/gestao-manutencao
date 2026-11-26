@@ -16,7 +16,7 @@ contratosRouter.use(autenticar);
 // A terceirizada só consulta (GET) os contratos do próprio prestador; criar, editar e excluir é do Administrador
 contratosRouter.use((req, res, next) =>
   req.method === 'GET'
-    ? permitirCom(['CONTRATOS_GERENCIAR', 'MANUTENCAO_CONSULTAR', 'MANUTENCAO_AVALIAR'], Perfil.TERCEIRIZADA)(req, res, next)
+    ? permitirCom(['CONTRATOS_GERENCIAR', 'MANUTENCAO_CONSULTAR', 'MANUTENCAO_AVALIAR', 'MANUTENCAO_FISCALIZAR', 'CONTRATOS_FINANCEIRO_CONSULTAR'], Perfil.TERCEIRIZADA)(req, res, next)
     : permitirCom('CONTRATOS_GERENCIAR')(req, res, next),
 );
 
@@ -25,6 +25,11 @@ const selecaoItens = {
   select: {
     id: true,
     servicoId: true,
+    modalidade: true,
+    categoriaCivilId: true,
+    categoriaEquipamentoId: true,
+    categoriaCivil: { select: { id: true, nome: true } },
+    categoriaEquipamento: { select: { id: true, nome: true } },
     valor: true,
     descontoPercentual: true,
     servico: { select: { id: true, nome: true, exigeAvaliacaoTecnica: true, exigeOrcamentoPrevio: true } },
@@ -78,7 +83,9 @@ const itemSchema = z.object({
   servicoId: z.string().uuid(),
   valor: z.number().nonnegative().max(999_999_999_999.99),
   descontoPercentual: z.number().min(0).max(100).default(0),
-});
+  modalidade: z.enum(['CIVIL', 'EQUIPAMENTO']).nullable().optional(),
+  categoriaId: z.string().uuid().nullable().optional(),
+}).refine((item) => Boolean(item.modalidade) === Boolean(item.categoriaId), 'Selecione a modalidade e a categoria do item.');
 
 const listaItens = z.array(itemSchema).max(200);
 const semRepetidos = (itens: Array<{ servicoId: string }>) =>
@@ -109,6 +116,11 @@ function dadosItens(itens: ItemEntrada[]) {
     servicoId: i.servicoId,
     valor: Math.round(i.valor * 100) / 100,
     descontoPercentual: Math.round(i.descontoPercentual * 100) / 100,
+    ...(i.modalidade !== undefined && {
+      modalidade: i.modalidade,
+      categoriaCivilId: i.modalidade === 'CIVIL' ? i.categoriaId : null,
+      categoriaEquipamentoId: i.modalidade === 'EQUIPAMENTO' ? i.categoriaId : null,
+    }),
   }));
 }
 
@@ -121,6 +133,12 @@ async function validarReferencias(tx: Prisma.TransactionClient, prestadorId: str
   const ids = itens.map((i) => i.servicoId);
   const encontrados = await tx.servicoContrato.count({ where: { id: { in: ids } } });
   if (encontrados !== ids.length) throw new AppError('Um ou mais serviços informados não existem.', 422);
+  const civis = [...new Set(itens.filter((i) => i.modalidade === 'CIVIL').map((i) => i.categoriaId!))];
+  const equipamentos = [...new Set(itens.filter((i) => i.modalidade === 'EQUIPAMENTO').map((i) => i.categoriaId!))];
+  if ((civis.length && await tx.categoriaCivil.count({ where: { id: { in: civis } } }) !== civis.length) ||
+      (equipamentos.length && await tx.categoria.count({ where: { id: { in: equipamentos } } }) !== equipamentos.length)) {
+    throw new AppError('Uma categoria do contrato não existe no cadastro.', 422);
+  }
 }
 
 contratosRouter.post('/', validarBody(contratoSchema), async (req, res) => {
@@ -176,6 +194,15 @@ contratosRouter.patch(
     }
 
     const contrato = await prisma.$transaction(async (tx) => {
+      const mudaBase = (itens?.length && somarItens(itens) !== Number(antes.valorTotal))
+        || (dados.vigenciaInicio && dados.vigenciaInicio.getTime() !== antes.vigenciaInicio?.getTime())
+        || (dados.vigenciaFim && dados.vigenciaFim.getTime() !== antes.vigenciaFim?.getTime());
+      if (mudaBase) {
+        await tx.$queryRaw`SELECT id FROM contrato WHERE id = ${antes.id} FOR UPDATE`;
+        if (await tx.contratoMovimento.count({ where: { contratoId: antes.id } })) {
+          throw new AppError('O contrato tem lançamentos. Registre um aditivo para alterar a base financeira ou a vigência.', 422);
+        }
+      }
       if (dados.prestadorId && dados.prestadorId !== antes.prestadorId) {
         const ligadas = await tx.manutencao.count({ where: { contratoId: antes.id } });
         if (ligadas > 0) {
@@ -236,8 +263,9 @@ contratosRouter.patch(
               );
             }
           }
-          if (id) await tx.contratoItem.update({ where: { id }, data: { valor: item.valor, descontoPercentual: item.descontoPercentual } });
-          else await tx.contratoItem.create({ data: { ...item, contratoId: antes.id } });
+          const { servicoId, ...campos } = item;
+          if (id) await tx.contratoItem.update({ where: { id }, data: campos });
+          else await tx.contratoItem.create({ data: { ...campos, servicoId, contratoId: antes.id } });
         }
       }
       const atualizado = await tx.contrato.update({
@@ -285,7 +313,13 @@ contratosRouter.delete('/:id', permitirCom('CONTRATOS_GERENCIAR'), async (req, r
       422,
     );
   }
-  await prisma.contrato.delete({ where: { id: req.params.id } });
+  await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM contrato WHERE id = ${contrato.id} FOR UPDATE`;
+    if (await tx.contratoMovimento.count({ where: { contratoId: contrato.id } })) {
+      throw new AppError('O contrato possui lançamentos financeiros. Desative o contrato para preservar o histórico.', 422);
+    }
+    await tx.contrato.delete({ where: { id: contrato.id } });
+  });
   await registrarAuditoria({
     usuarioId: req.usuario!.sub,
     acao: 'EXCLUIR_CONTRATO',

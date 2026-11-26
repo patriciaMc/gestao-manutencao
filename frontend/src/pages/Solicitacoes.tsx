@@ -138,6 +138,7 @@ interface LinhaLista {
   rotuloLink: string;
   emenda: boolean;
   automatica: boolean;
+  semCoberturaContrato?: boolean;
   destaque?: ReturnType<typeof destaqueTriagem>;
 }
 
@@ -191,6 +192,7 @@ const daManutencao = (m: Manutencao): LinhaLista => ({
   emenda: false,
   automatica: false,
   destaque: destaqueTriagem(m),
+  semCoberturaContrato: m.semCoberturaContrato,
 });
 
 const normalizarBusca = (texto: string) =>
@@ -392,7 +394,10 @@ export function Solicitacoes() {
       l.categoria, l.servico, l.prestador?.nome, l.statusTexto, l.tipoTexto, ...l.termosExtras].filter(Boolean).join(' '));
     return termos.every((termo) => indice.includes(termo));
   });
-  const incluiSituacao = situacoes.find(({ id }) => id === filtroSituacao)?.inclui;
+  const indicadores = podeTriar ? [...situacoes, {
+    id: 'sem-cobertura', nome: 'Sem cobertura contratual', inclui: (linha: LinhaLista) => Boolean(linha.semCoberturaContrato),
+  }] : situacoes;
+  const incluiSituacao = indicadores.find(({ id }) => id === filtroSituacao)?.inclui;
   const solicitacoesExibidas = incluiSituacao ? selecao.filter(incluiSituacao) : selecao;
 
   function limparFiltros() {
@@ -474,7 +479,7 @@ export function Solicitacoes() {
         <div className="chamados-painel-resumo">
           <h3 id="chamados-painel-titulo">Painel de chamados</h3>
           <div className="chamados-indicadores">
-            {situacoes.map(({ id, nome, inclui }) => (
+            {indicadores.map(({ id, nome, inclui }) => (
               <button key={id} type="button" aria-pressed={filtroSituacao === id}
                 disabled={carregando || falhaCarregamento} onClick={() => setFiltroSituacao(id)}>
                 <span>{nome}</span>
@@ -709,6 +714,7 @@ export function Solicitacoes() {
                       <span className="inventario-data">{l.tipoTexto}</span>
                       <small className="chamados-tipo-detalhe">{l.categoria}{l.servico !== l.tipoTexto && ` · ${l.servico}`}</small>
                       {l.prestador && <small className="chamados-tipo-detalhe">{l.prestador.nome}</small>}
+                      {podeTriar && l.semCoberturaContrato && <span className="badge badge-gray solicitacoes-selo">Sem cobertura cadastrada</span>}
                       {naTriagem && l.destaque?.nome && <span className="badge badge-gray solicitacoes-selo">{l.destaque.nome}</span>}
                       {l.emenda && <span className="badge badge-purple solicitacoes-selo">Emenda</span>}
                       {l.automatica && <span className="badge badge-gray solicitacoes-selo">Automática</span>}

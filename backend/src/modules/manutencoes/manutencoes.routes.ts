@@ -80,7 +80,8 @@ manutencoesRouter.get('/', leitura, async (req, res) => {
     busca: typeof req.query.busca === 'string' ? req.query.busca : undefined,
     semInteracao: req.query.semInteracao === 'true',
   });
-  res.json(manutencoes.map((m) => paraPerfil(req.usuario!.perfil, m)));
+  const sinalizadas = await service.sinalizarCobertura(req.usuario!, manutencoes);
+  res.json(sinalizadas.map((m) => paraPerfil(req.usuario!.perfil, m)));
 });
 
 const consultaHistoricoTriagem = z.object({
