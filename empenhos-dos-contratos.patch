@@ -1,0 +1,1087 @@
+From 0e4829cfa69bca27d5c433526aff688f44536369 Mon Sep 17 00:00:00 2001
+From: patriciaMc <105026886+patriciaMc@users.noreply.github.com>
+Date: Wed, 25 Nov 2026 22:26:26 -0300
+Subject: [PATCH] =?UTF-8?q?Adiciona=20controle=20de=20empenhos,=20dota?=
+ =?UTF-8?q?=C3=A7=C3=B5es=20e=20aditivos=20aos=20contratos?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ .../migration.sql                             |  19 ++
+ backend/prisma/schema.prisma                  |  24 +++
+ backend/src/app.ts                            |   2 +
+ backend/src/lib/permissoes.ts                 |   1 +
+ .../categorias-civis.routes.ts                |   2 +-
+ .../src/modules/contratos/contratos.routes.ts |  44 +++-
+ .../modules/contratos/financeiro.routes.ts    |  79 +++++++
+ backend/src/modules/contratos/financeiro.ts   | 120 +++++++++++
+ .../modules/manutencoes/manutencoes.routes.ts |   3 +-
+ .../manutencoes/manutencoes.service.ts        |  24 +++
+ backend/tests/contrato-financeiro.test.ts     |  59 ++++++
+ backend/tests/permissoes.test.ts              |   2 +-
+ frontend/src/App.tsx                          |   6 +-
+ frontend/src/components/Layout.tsx            |   2 +-
+ frontend/src/pages/ContratoFinanceiro.tsx     | 198 ++++++++++++++++++
+ frontend/src/pages/ContratoFormulario.tsx     |  51 ++++-
+ frontend/src/pages/Contratos.tsx              |   2 +-
+ frontend/src/pages/Solicitacoes.tsx           |  10 +-
+ frontend/src/types.ts                         |   6 +
+ frontend/src/utils/permissoes.ts              |   3 +-
+ 20 files changed, 640 insertions(+), 17 deletions(-)
+ create mode 100644 backend/prisma/migrations/20261125110000_movimentos_contrato/migration.sql
+ create mode 100644 backend/src/modules/contratos/financeiro.routes.ts
+ create mode 100644 backend/src/modules/contratos/financeiro.ts
+ create mode 100644 backend/tests/contrato-financeiro.test.ts
+ create mode 100644 frontend/src/pages/ContratoFinanceiro.tsx
+
+diff --git a/backend/prisma/migrations/20261125110000_movimentos_contrato/migration.sql b/backend/prisma/migrations/20261125110000_movimentos_contrato/migration.sql
+new file mode 100644
+index 0000000..d224345
+--- /dev/null
++++ b/backend/prisma/migrations/20261125110000_movimentos_contrato/migration.sql
+@@ -0,0 +1,19 @@
++CREATE TABLE "contrato_movimento" (
++    "id" TEXT NOT NULL,
++    "contrato_id" TEXT NOT NULL,
++    "dados" JSONB NOT NULL,
++    "ordem" BIGSERIAL NOT NULL,
++    "criado_em" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    CONSTRAINT "contrato_movimento_pkey" PRIMARY KEY ("id"),
++    CONSTRAINT "contrato_movimento_contrato_id_fkey" FOREIGN KEY ("contrato_id")
++        REFERENCES "contrato"("id") ON DELETE RESTRICT ON UPDATE CASCADE
++);
++CREATE INDEX "contrato_movimento_contrato_id_ordem_idx"
++    ON "contrato_movimento"("contrato_id", "ordem");
++
++ALTER TABLE "contrato_item" ADD COLUMN "modalidade" "TipoManutencao",
++    ADD COLUMN "categoria_civil_id" TEXT, ADD COLUMN "categoria_equipamento_id" TEXT;
++ALTER TABLE "contrato_item" ADD CONSTRAINT "contrato_item_categoria_civil_id_fkey"
++    FOREIGN KEY ("categoria_civil_id") REFERENCES "categoria_civil"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
++ALTER TABLE "contrato_item" ADD CONSTRAINT "contrato_item_categoria_equipamento_id_fkey"
++    FOREIGN KEY ("categoria_equipamento_id") REFERENCES "categoria"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+diff --git a/backend/prisma/schema.prisma b/backend/prisma/schema.prisma
+index 894d0e3..3126ac5 100644
+--- a/backend/prisma/schema.prisma
++++ b/backend/prisma/schema.prisma
+@@ -279,6 +279,8 @@ model Categoria {
+ 
+   tipos TipoEquipamento[]
+ 
++  itensContrato ContratoItem[]
++
+   @@map("categoria")
+ }
+ 
+@@ -666,10 +668,24 @@ model Contrato {
+   itens       ContratoItem[]
+   manutencoes Manutencao[]
+ 
++  movimentos ContratoMovimento[]
++
+   @@index([prestadorId])
+   @@map("contrato")
+ }
+ 
++model ContratoMovimento {
++  id         String   @id @default(uuid())
++  contratoId String   @map("contrato_id")
++  contrato   Contrato @relation(fields: [contratoId], references: [id], onDelete: Restrict)
++  dados      Json
++  ordem      BigInt   @default(autoincrement())
++  criadoEm   DateTime @default(now()) @map("criado_em")
++
++  @@index([contratoId, ordem])
++  @@map("contrato_movimento")
++}
++
+ // Serviço contratado, com valor próprio e tipo de manutenção.
+ model ContratoItem {
+   id                 String          @id @default(uuid())
+@@ -682,6 +698,12 @@ model ContratoItem {
+   descontoPercentual Decimal         @default(0) @map("desconto_percentual") @db.Decimal(5, 2)
+   criadoEm           DateTime        @default(now()) @map("criado_em")
+ 
++  modalidade             TipoManutencao?
++  categoriaCivilId       String? @map("categoria_civil_id")
++  categoriaCivil         CategoriaCivil? @relation(fields: [categoriaCivilId], references: [id], onDelete: Restrict)
++  categoriaEquipamentoId String? @map("categoria_equipamento_id")
++  categoriaEquipamento   Categoria? @relation(fields: [categoriaEquipamentoId], references: [id], onDelete: Restrict)
++
+   manutencoes Manutencao[]
+ 
+   @@unique([contratoId, servicoId])
+@@ -853,6 +875,8 @@ model CategoriaCivil {
+   perguntas   PerguntaCategoria[]
+   manutencoes Manutencao[]
+ 
++  itensContrato ContratoItem[]
++
+   @@map("categoria_civil")
+ }
+ 
+diff --git a/backend/src/app.ts b/backend/src/app.ts
+index d87beb9..05260e5 100644
+--- a/backend/src/app.ts
++++ b/backend/src/app.ts
+@@ -12,6 +12,7 @@ import { manutencoesRouter } from './modules/manutencoes/manutencoes.routes';
+ import { solicitacoesRouter } from './modules/solicitacoes/solicitacoes.routes';
+ import { atasRouter } from './modules/atas/atas.routes';
+ import { sinapiRouter } from './modules/sinapi/sinapi.routes';
++import { financeiroContratoRouter } from './modules/contratos/financeiro.routes';
+ import { contratosRouter } from './modules/contratos/contratos.routes';
+ import { prestadoresRouter } from './modules/prestadores/prestadores.routes';
+ import { setoresRouter } from './modules/setores/setores.routes';
+@@ -96,6 +97,7 @@ export function criarApp() {
+   app.use('/manutencoes/:id/mensagens', criarMensagensRouter('manutencao'));
+   app.use('/solicitacoes', solicitacoesRouter);
+   app.use('/atas', atasRouter);
++  app.use('/contratos', financeiroContratoRouter);
+   app.use('/contratos', contratosRouter);
+   app.use('/sinapi', sinapiRouter);
+   app.use('/prestadores', prestadoresRouter);
+diff --git a/backend/src/lib/permissoes.ts b/backend/src/lib/permissoes.ts
+index 97b5eb9..e154a6f 100644
+--- a/backend/src/lib/permissoes.ts
++++ b/backend/src/lib/permissoes.ts
+@@ -12,6 +12,7 @@ export const TODAS_PERMISSOES = [
+   'MANUTENCAO_MEDICAO_CONFERIR',
+   'MANUTENCAO_FISCALIZAR',
+   'CONTRATOS_GERENCIAR',
++  'CONTRATOS_FINANCEIRO_CONSULTAR',
+   'ATAS_GERENCIAR',
+   'ESTOQUE_GERENCIAR',
+   'RELATORIOS_VISUALIZAR',
+diff --git a/backend/src/modules/categorias-civis/categorias-civis.routes.ts b/backend/src/modules/categorias-civis/categorias-civis.routes.ts
+index 9801660..b79da52 100644
+--- a/backend/src/modules/categorias-civis/categorias-civis.routes.ts
++++ b/backend/src/modules/categorias-civis/categorias-civis.routes.ts
+@@ -49,7 +49,7 @@ const categoriaSchema = z.object({
+ // Lista: quem só abre chamados vê as categorias ativas e suas perguntas ativas; quem cadastra vê tudo
+ categoriasCivisRouter.get(
+   '/',
+-  permitirCom(['CONFIGURACOES_GERENCIAR', 'MANUTENCAO_ESCREVER', 'MANUTENCAO_AVALIAR', 'MANUTENCAO_TRIAR', 'MANUTENCAO_CONSULTAR'], Perfil.UNIDADE),
++  permitirCom(['CONFIGURACOES_GERENCIAR', 'MANUTENCAO_ESCREVER', 'MANUTENCAO_AVALIAR', 'MANUTENCAO_TRIAR', 'MANUTENCAO_CONSULTAR', 'CONTRATOS_GERENCIAR'], Perfil.UNIDADE),
+   async (req, res) => {
+     const cadastra = req.usuario!.permissoes.includes('CONFIGURACOES_GERENCIAR');
+     const todas = cadastra && req.query.todas === 'true';
+diff --git a/backend/src/modules/contratos/contratos.routes.ts b/backend/src/modules/contratos/contratos.routes.ts
+index 6d79e7e..9b58960 100644
+--- a/backend/src/modules/contratos/contratos.routes.ts
++++ b/backend/src/modules/contratos/contratos.routes.ts
+@@ -16,7 +16,7 @@ contratosRouter.use(autenticar);
+ // A terceirizada só consulta (GET) os contratos do próprio prestador; criar, editar e excluir é do Administrador
+ contratosRouter.use((req, res, next) =>
+   req.method === 'GET'
+-    ? permitirCom(['CONTRATOS_GERENCIAR', 'MANUTENCAO_CONSULTAR', 'MANUTENCAO_AVALIAR'], Perfil.TERCEIRIZADA)(req, res, next)
++    ? permitirCom(['CONTRATOS_GERENCIAR', 'MANUTENCAO_CONSULTAR', 'MANUTENCAO_AVALIAR', 'MANUTENCAO_FISCALIZAR', 'CONTRATOS_FINANCEIRO_CONSULTAR'], Perfil.TERCEIRIZADA)(req, res, next)
+     : permitirCom('CONTRATOS_GERENCIAR')(req, res, next),
+ );
+ 
+@@ -25,6 +25,11 @@ const selecaoItens = {
+   select: {
+     id: true,
+     servicoId: true,
++    modalidade: true,
++    categoriaCivilId: true,
++    categoriaEquipamentoId: true,
++    categoriaCivil: { select: { id: true, nome: true } },
++    categoriaEquipamento: { select: { id: true, nome: true } },
+     valor: true,
+     descontoPercentual: true,
+     servico: { select: { id: true, nome: true, exigeAvaliacaoTecnica: true, exigeOrcamentoPrevio: true } },
+@@ -78,7 +83,9 @@ const itemSchema = z.object({
+   servicoId: z.string().uuid(),
+   valor: z.number().nonnegative().max(999_999_999_999.99),
+   descontoPercentual: z.number().min(0).max(100).default(0),
+-});
++  modalidade: z.enum(['CIVIL', 'EQUIPAMENTO']).nullable().optional(),
++  categoriaId: z.string().uuid().nullable().optional(),
++}).refine((item) => Boolean(item.modalidade) === Boolean(item.categoriaId), 'Selecione a modalidade e a categoria do item.');
+ 
+ const listaItens = z.array(itemSchema).max(200);
+ const semRepetidos = (itens: Array<{ servicoId: string }>) =>
+@@ -109,6 +116,11 @@ function dadosItens(itens: ItemEntrada[]) {
+     servicoId: i.servicoId,
+     valor: Math.round(i.valor * 100) / 100,
+     descontoPercentual: Math.round(i.descontoPercentual * 100) / 100,
++    ...(i.modalidade !== undefined && {
++      modalidade: i.modalidade,
++      categoriaCivilId: i.modalidade === 'CIVIL' ? i.categoriaId : null,
++      categoriaEquipamentoId: i.modalidade === 'EQUIPAMENTO' ? i.categoriaId : null,
++    }),
+   }));
+ }
+ 
+@@ -121,6 +133,12 @@ async function validarReferencias(tx: Prisma.TransactionClient, prestadorId: str
+   const ids = itens.map((i) => i.servicoId);
+   const encontrados = await tx.servicoContrato.count({ where: { id: { in: ids } } });
+   if (encontrados !== ids.length) throw new AppError('Um ou mais serviços informados não existem.', 422);
++  const civis = [...new Set(itens.filter((i) => i.modalidade === 'CIVIL').map((i) => i.categoriaId!))];
++  const equipamentos = [...new Set(itens.filter((i) => i.modalidade === 'EQUIPAMENTO').map((i) => i.categoriaId!))];
++  if ((civis.length && await tx.categoriaCivil.count({ where: { id: { in: civis } } }) !== civis.length) ||
++      (equipamentos.length && await tx.categoria.count({ where: { id: { in: equipamentos } } }) !== equipamentos.length)) {
++    throw new AppError('Uma categoria do contrato não existe no cadastro.', 422);
++  }
+ }
+ 
+ contratosRouter.post('/', validarBody(contratoSchema), async (req, res) => {
+@@ -176,6 +194,15 @@ contratosRouter.patch(
+     }
+ 
+     const contrato = await prisma.$transaction(async (tx) => {
++      const mudaBase = (itens?.length && somarItens(itens) !== Number(antes.valorTotal))
++        || (dados.vigenciaInicio && dados.vigenciaInicio.getTime() !== antes.vigenciaInicio?.getTime())
++        || (dados.vigenciaFim && dados.vigenciaFim.getTime() !== antes.vigenciaFim?.getTime());
++      if (mudaBase) {
++        await tx.$queryRaw`SELECT id FROM contrato WHERE id = ${antes.id} FOR UPDATE`;
++        if (await tx.contratoMovimento.count({ where: { contratoId: antes.id } })) {
++          throw new AppError('O contrato tem lançamentos. Registre um aditivo para alterar a base financeira ou a vigência.', 422);
++        }
++      }
+       if (dados.prestadorId && dados.prestadorId !== antes.prestadorId) {
+         const ligadas = await tx.manutencao.count({ where: { contratoId: antes.id } });
+         if (ligadas > 0) {
+@@ -236,8 +263,9 @@ contratosRouter.patch(
+               );
+             }
+           }
+-          if (id) await tx.contratoItem.update({ where: { id }, data: { valor: item.valor, descontoPercentual: item.descontoPercentual } });
+-          else await tx.contratoItem.create({ data: { ...item, contratoId: antes.id } });
++          const { servicoId, ...campos } = item;
++          if (id) await tx.contratoItem.update({ where: { id }, data: campos });
++          else await tx.contratoItem.create({ data: { ...campos, servicoId, contratoId: antes.id } });
+         }
+       }
+       const atualizado = await tx.contrato.update({
+@@ -285,7 +313,13 @@ contratosRouter.delete('/:id', permitirCom('CONTRATOS_GERENCIAR'), async (req, r
+       422,
+     );
+   }
+-  await prisma.contrato.delete({ where: { id: req.params.id } });
++  await prisma.$transaction(async (tx) => {
++    await tx.$queryRaw`SELECT id FROM contrato WHERE id = ${contrato.id} FOR UPDATE`;
++    if (await tx.contratoMovimento.count({ where: { contratoId: contrato.id } })) {
++      throw new AppError('O contrato possui lançamentos financeiros. Desative o contrato para preservar o histórico.', 422);
++    }
++    await tx.contrato.delete({ where: { id: contrato.id } });
++  });
+   await registrarAuditoria({
+     usuarioId: req.usuario!.sub,
+     acao: 'EXCLUIR_CONTRATO',
+diff --git a/backend/src/modules/contratos/financeiro.routes.ts b/backend/src/modules/contratos/financeiro.routes.ts
+new file mode 100644
+index 0000000..b89d704
+--- /dev/null
++++ b/backend/src/modules/contratos/financeiro.routes.ts
+@@ -0,0 +1,79 @@
++import { Router } from 'express';
++import { Prisma } from '@prisma/client';
++import { z } from 'zod';
++import { prisma } from '../../lib/prisma';
++import { autenticar } from '../../middlewares/auth';
++import { permitirCom } from '../../middlewares/rbac';
++import { AppError } from '../../errors/AppError';
++import { registrarAuditoria } from '../../services/auditoria.service';
++import { resumirFinanceiro, validarMovimento, type Lancamento } from './financeiro';
++
++export const financeiroContratoRouter = Router();
++const editores = ['CONTRATOS_GERENCIAR', 'MANUTENCAO_FISCALIZAR'] as const;
++const leitores = permitirCom([...editores, 'CONTRATOS_FINANCEIRO_CONSULTAR']);
++const valor = z.number().int().positive().max(99_999_999_999_999);
++const codigo = z.string().trim().min(1).max(80);
++const data = z.iso.date();
++const movimento = z.discriminatedUnion('tipo', [
++  z.object({ tipo: z.literal('DOTACAO'), codigo, valor }),
++  z.object({ tipo: z.literal('EMPENHO'), codigo, numero: codigo, data, valor }),
++  z.object({ tipo: z.literal('CONFIRMAR_EMPENHO'), empenhoId: z.string().uuid(), data }),
++  z.object({ tipo: z.literal('ANULACAO'), empenhoId: z.string().uuid(), data, valor }),
++  z.object({ tipo: z.literal('CONFIRMAR_ANULACAO'), anulacaoId: z.string().uuid(), data }),
++  z.object({ tipo: z.literal('ADITIVO'), numero: codigo, modalidade: z.enum(['RENOVACAO', 'ACRESCIMO', 'SUPRESSAO']),
++    data, valor: valor.nonnegative().or(z.literal(0)), fim: data.optional(), codigo: codigo.optional(), descricao: z.string().trim().min(2).max(1000),
++  }).refine((m) => m.modalidade === 'RENOVACAO' ? Boolean(m.fim && !m.codigo) : !m.fim && m.valor > 0 && (!m.codigo || m.modalidade === 'SUPRESSAO')),
++]);
++
++async function carregar(tx: Prisma.TransactionClient, id: string) {
++  const contrato = await tx.contrato.findUnique({
++    where: { id },
++    select: { numero: true, valorTotal: true, ativo: true, status: true, vigenciaInicio: true, vigenciaFim: true,
++      movimentos: { select: { id: true, dados: true }, orderBy: { ordem: 'asc' } } },
++  });
++  if (!contrato) throw new AppError('Contrato não encontrado.', 404);
++  const base = { total: Math.round(Number(contrato.valorTotal ?? 0) * 100), inicio: contrato.vigenciaInicio.toISOString().slice(0, 10),
++    fim: contrato.vigenciaFim.toISOString().slice(0, 10), vigente: contrato.ativo && contrato.status !== 'EXPIRADO', ativo: contrato.ativo };
++  const historico = contrato.movimentos.map(({ id, dados }) => ({ ...(dados as Omit<Lancamento, 'id'>), id } as Lancamento));
++  return { base, historico, numero: contrato.numero, id };
++}
++
++financeiroContratoRouter.get('/:id/financeiro', autenticar, leitores, async (req, res) => {
++  const { base, historico, numero } = await carregar(prisma, req.params.id);
++  res.json({ ...base, numero, ...resumirFinanceiro(base, historico) });
++});
++
++financeiroContratoRouter.post('/:id/financeiro', autenticar, permitirCom([...editores]), async (req, res) => {
++  const entrada = movimento.safeParse(req.body);
++  if (!entrada.success) throw new AppError('Confira os dados do lançamento financeiro.', 422);
++  const dados = entrada.data;
++  const resumo = await prisma.$transaction(async (tx) => {
++    await tx.$queryRaw`SELECT id FROM contrato WHERE id = ${req.params.id} FOR UPDATE`;
++    const { base, historico, numero, id } = await carregar(tx, req.params.id);
++    const erro = validarMovimento(base, historico, dados);
++    if (erro) throw new AppError(erro, 422);
++    const registro = await tx.contratoMovimento.create({ data: { contratoId: id, dados }, select: { id: true } });
++    if (dados.tipo === 'ADITIVO' && dados.fim) {
++      await tx.contrato.update({ where: { id }, data: { vigenciaFim: new Date(`${dados.fim}T00:00:00Z`) } });
++    }
++    await registrarAuditoria({ usuarioId: req.usuario!.sub, acao: `CONTRATO_${dados.tipo}`, entidade: 'contrato', entidadeId: id,
++      dadosDepois: { movimentoId: registro.id, ...dados } }, tx);
++    return { ...base, numero, ...resumirFinanceiro(base, [...historico, { id: registro.id, ...dados }]) };
++  });
++  res.status(201).json(resumo);
++});
++
++financeiroContratoRouter.patch('/:id/financeiro/habilitacao', autenticar, permitirCom([...editores]), async (req, res) => {
++  const entrada = z.object({ ativo: z.boolean() }).strict().safeParse(req.body);
++  if (!entrada.success) throw new AppError('Informe se o contrato está habilitado.', 422);
++  const { ativo } = entrada.data;
++  const resumo = await prisma.$transaction(async (tx) => {
++    await tx.$queryRaw`SELECT id FROM contrato WHERE id = ${req.params.id} FOR UPDATE`;
++    const { base, historico, numero, id } = await carregar(tx, req.params.id);
++    const contrato = await tx.contrato.update({ where: { id }, data: { ativo }, select: { status: true } });
++    await registrarAuditoria({ usuarioId: req.usuario!.sub, acao: ativo ? 'HABILITAR_CONTRATO' : 'DESABILITAR_CONTRATO',
++      entidade: 'contrato', entidadeId: id, dadosDepois: { ativo } }, tx);
++    return { ...base, ativo, vigente: ativo && contrato.status !== 'EXPIRADO', numero, ...resumirFinanceiro(base, historico) };
++  });
++  res.json(resumo);
++});
+diff --git a/backend/src/modules/contratos/financeiro.ts b/backend/src/modules/contratos/financeiro.ts
+new file mode 100644
+index 0000000..630a677
+--- /dev/null
++++ b/backend/src/modules/contratos/financeiro.ts
+@@ -0,0 +1,120 @@
++export type Movimento =
++  | { tipo: 'DOTACAO'; codigo: string; valor: number }
++  | { tipo: 'EMPENHO'; codigo: string; numero: string; data: string; valor: number }
++  | { tipo: 'CONFIRMAR_EMPENHO'; empenhoId: string; data: string }
++  | { tipo: 'ANULACAO'; empenhoId: string; data: string; valor: number }
++  | { tipo: 'CONFIRMAR_ANULACAO'; anulacaoId: string; data: string }
++  | { tipo: 'ADITIVO'; numero: string; modalidade: 'RENOVACAO' | 'ACRESCIMO' | 'SUPRESSAO'; data: string; valor: number; fim?: string; codigo?: string; descricao: string };
++
++export interface ContratoBase {
++  total: number;
++  inicio: string;
++  fim: string;
++  vigente: boolean;
++}
++
++export type Lancamento = Movimento & { id: string };
++
++export function resumirFinanceiro(contrato: ContratoBase, lancamentos: Lancamento[]) {
++  const dotacoes = new Map<string, { codigo: string; valor: number; saldo: number }>();
++  const empenhos = new Map<string, Extract<Lancamento, { tipo: 'EMPENHO' }> & { confirmadoEm?: string; anulado: number }>();
++  const anulacoes = new Map<string, Extract<Lancamento, { tipo: 'ANULACAO' }> & { confirmadaEm?: string }>();
++  const aditivos: Array<Extract<Lancamento, { tipo: 'ADITIVO' }>> = [];
++  let total = contrato.total;
++  let fim = contrato.fim;
++  for (const item of lancamentos) {
++    switch (item.tipo) {
++      case 'DOTACAO': dotacoes.set(item.codigo, { codigo: item.codigo, valor: item.valor, saldo: item.valor }); break;
++      case 'EMPENHO': empenhos.set(item.id, { ...item, anulado: 0 }); break;
++      case 'ANULACAO': anulacoes.set(item.id, { ...item }); break;
++      case 'CONFIRMAR_EMPENHO': {
++        const empenho = empenhos.get(item.empenhoId);
++        if (empenho) empenho.confirmadoEm = item.data;
++        break;
++      }
++      case 'CONFIRMAR_ANULACAO': {
++        const anulacao = anulacoes.get(item.anulacaoId);
++        if (anulacao) {
++          anulacao.confirmadaEm = item.data;
++          const empenho = empenhos.get(anulacao.empenhoId);
++          if (empenho) empenho.anulado += anulacao.valor;
++        }
++        break;
++      }
++      case 'ADITIVO': {
++        aditivos.push(item);
++        total += item.modalidade === 'SUPRESSAO' ? -item.valor : item.valor;
++        if (item.modalidade === 'SUPRESSAO' && item.codigo) {
++          const dotacao = dotacoes.get(item.codigo);
++          if (dotacao) {
++            dotacao.valor -= item.valor;
++            dotacao.saldo -= item.valor;
++          }
++        }
++        if (item.fim) fim = item.fim;
++        break;
++      }
++    }
++  }
++  let solicitado = 0;
++  let empenhado = 0;
++  let anulado = 0;
++  for (const empenho of empenhos.values()) {
++    const dotacao = dotacoes.get(empenho.codigo);
++    if (dotacao) dotacao.saldo -= empenho.valor - empenho.anulado;
++    if (empenho.confirmadoEm) empenhado += empenho.valor;
++    else solicitado += empenho.valor;
++    anulado += empenho.anulado;
++  }
++  const distribuido = [...dotacoes.values()].reduce((soma, d) => soma + d.valor, 0);
++  return { total, fim, solicitado, empenhado, anulado, distribuido,
++    saldo: total - solicitado - empenhado + anulado,
++    saldoMigracao: total - empenhado + anulado,
++    dotacoes: [...dotacoes.values()], empenhos: [...empenhos.values()], anulacoes: [...anulacoes.values()], aditivos };
++}
++
++export function validarMovimento(contrato: ContratoBase, historico: Lancamento[], dados: Movimento): string | undefined {
++  const resumo = resumirFinanceiro(contrato, historico);
++  switch (dados.tipo) {
++    case 'DOTACAO':
++      if (resumo.dotacoes.some((dotacao) => dotacao.codigo === dados.codigo)) return 'Esta dotação já está cadastrada.';
++      if (dados.valor > resumo.total - resumo.distribuido) return 'A dotação ultrapassa o valor contratual ainda disponível para distribuição.';
++      return;
++    case 'EMPENHO': {
++      const dotacao = resumo.dotacoes.find((item) => item.codigo === dados.codigo);
++      if (!contrato.vigente || dados.data < contrato.inicio || dados.data > resumo.fim) return 'A solicitação deve estar dentro da vigência de um contrato ativo.';
++      if (!dotacao || dados.valor > dotacao.saldo || dados.valor > resumo.saldo) return 'Saldo insuficiente na dotação ou no contrato.';
++      if (resumo.empenhos.some((item) => item.numero.toLowerCase() === dados.numero.toLowerCase())) return 'Já existe uma solicitação com esse número.';
++      return;
++    }
++    case 'CONFIRMAR_EMPENHO': {
++      const empenho = resumo.empenhos.find((item) => item.id === dados.empenhoId);
++      if (!empenho || empenho.confirmadoEm) return 'Empenho inexistente ou já confirmado.';
++      if (dados.data < empenho.data) return 'A confirmação deve ocorrer a partir da solicitação.';
++      return;
++    }
++    case 'ANULACAO': {
++      const empenho = resumo.empenhos.find((item) => item.id === dados.empenhoId);
++      if (!empenho?.confirmadoEm || dados.data < empenho.confirmadoEm) return 'A anulação exige um empenho confirmado e uma data igual ou posterior à confirmação.';
++      const pendentes = resumo.anulacoes.filter((a) => a.empenhoId === empenho.id && !a.confirmadaEm).reduce((soma, a) => soma + a.valor, 0);
++      if (dados.valor > empenho.valor - empenho.anulado - pendentes) return 'O valor ultrapassa o saldo disponível para anular.';
++      return;
++    }
++    case 'CONFIRMAR_ANULACAO': {
++      const anulacao = resumo.anulacoes.find((item) => item.id === dados.anulacaoId);
++      if (!anulacao || anulacao.confirmadaEm) return 'Anulação inexistente ou já confirmada.';
++      if (dados.data < anulacao.data) return 'O encerramento deve ocorrer a partir da solicitação de anulação.';
++      return;
++    }
++    case 'ADITIVO':
++      if (resumo.aditivos.some((item) => item.numero.toLowerCase() === dados.numero.toLowerCase())) return 'Já existe um aditivo com esse número.';
++      if (dados.data < contrato.inicio) return 'O aditivo não pode ser anterior ao início do contrato.';
++      if (dados.modalidade === 'RENOVACAO' && (!dados.fim || dados.fim <= resumo.fim)) return 'Informe uma nova data de vigência posterior à atual.';
++      if (dados.modalidade === 'SUPRESSAO') {
++        const limite = dados.codigo ? resumo.dotacoes.find((item) => item.codigo === dados.codigo)?.saldo ?? 0
++          : resumo.total - resumo.distribuido;
++        if (dados.valor > limite) return 'A supressão ultrapassa o saldo da dotação ou o valor ainda não distribuído.';
++      }
++      if (dados.modalidade !== 'SUPRESSAO' && resumo.total + dados.valor > 99_999_999_999_999) return 'O valor atualizado ultrapassa o limite do sistema.';
++  }
++}
+diff --git a/backend/src/modules/manutencoes/manutencoes.routes.ts b/backend/src/modules/manutencoes/manutencoes.routes.ts
+index 093fe8f..d8a8544 100644
+--- a/backend/src/modules/manutencoes/manutencoes.routes.ts
++++ b/backend/src/modules/manutencoes/manutencoes.routes.ts
+@@ -80,7 +80,8 @@ manutencoesRouter.get('/', leitura, async (req, res) => {
+     busca: typeof req.query.busca === 'string' ? req.query.busca : undefined,
+     semInteracao: req.query.semInteracao === 'true',
+   });
+-  res.json(manutencoes.map((m) => paraPerfil(req.usuario!.perfil, m)));
++  const sinalizadas = await service.sinalizarCobertura(req.usuario!, manutencoes);
++  res.json(sinalizadas.map((m) => paraPerfil(req.usuario!.perfil, m)));
+ });
+ 
+ const consultaHistoricoTriagem = z.object({
+diff --git a/backend/src/modules/manutencoes/manutencoes.service.ts b/backend/src/modules/manutencoes/manutencoes.service.ts
+index 1e1b457..4e2de01 100644
+--- a/backend/src/modules/manutencoes/manutencoes.service.ts
++++ b/backend/src/modules/manutencoes/manutencoes.service.ts
+@@ -101,6 +101,30 @@ export async function listar(
+   });
+ }
+ 
++export async function sinalizarCobertura(usuario: AuthPayload, chamados: Awaited<ReturnType<typeof listar>>) {
++  if (usuario.perfil !== 'OPERADOR' || !usuario.permissoes.includes('MANUTENCAO_TRIAR')) return chamados;
++  const candidatos = new Map(chamados.flatMap((chamado) => {
++    if (chamado.status !== 'PENDENTE_APROVACAO' && chamado.status !== 'AVALIADO') return [];
++    const categoria = chamado.tipo === 'CIVIL' ? chamado.categoriaCivilId : chamado.equipamento?.tipoEquipamento?.categoriaId;
++    return categoria ? [[chamado.id, `${chamado.tipo}:${categoria}`] as const] : [];
++  }));
++  if (!candidatos.size) return chamados;
++  const dia = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Sao_Paulo' }).format(new Date());
++  const hoje = new Date(`${dia}T00:00:00Z`);
++  const itens = await prisma.contratoItem.findMany({
++    where: {
++      modalidade: { not: null },
++      contrato: { ativo: true, status: { not: 'EXPIRADO' }, vigenciaInicio: { lte: hoje }, vigenciaFim: { gte: hoje } },
++    },
++    select: { modalidade: true, categoriaCivilId: true, categoriaEquipamentoId: true },
++  });
++  const chaves = new Set(itens.map((item) => `${item.modalidade}:${item.categoriaCivilId ?? item.categoriaEquipamentoId}`));
++  return chamados.map((chamado) => {
++    const chave = candidatos.get(chamado.id);
++    return chave ? { ...chamado, semCoberturaContrato: !chaves.has(chave) } : chamado;
++  });
++}
++
+ export async function buscarPorId(usuario: AuthPayload, id: string) {
+   const manutencao = await prisma.manutencao.findUnique({
+     where: { id },
+diff --git a/backend/tests/contrato-financeiro.test.ts b/backend/tests/contrato-financeiro.test.ts
+new file mode 100644
+index 0000000..414aeab
+--- /dev/null
++++ b/backend/tests/contrato-financeiro.test.ts
+@@ -0,0 +1,59 @@
++import request from 'supertest';
++import { prismaMock } from './prisma-mock';
++import { criarApp } from '../src/app';
++import { resumirFinanceiro, validarMovimento, type Lancamento, type Movimento } from '../src/modules/contratos/financeiro';
++import { auth } from './helpers';
++
++const contrato = { total: 9000, inicio: '2026-01-01', fim: '2026-12-31', vigente: true };
++const data = '2026-11-21';
++
++describe('Financeiro de contratos', () => {
++  it('calcula R$ 60,00 após dois empenhos e devolve R$ 5,00 somente ao encerrar a anulação', () => {
++    const historico: Lancamento[] = [];
++    function lancar(id: string, movimento: Movimento) {
++      expect(validarMovimento(contrato, historico, movimento)).toBeUndefined();
++      historico.push({ id, ...movimento });
++    }
++    lancar('d1', { tipo: 'DOTACAO', codigo: '1111', valor: 4500 });
++    lancar('d2', { tipo: 'DOTACAO', codigo: '2222', valor: 4500 });
++    lancar('e1', { tipo: 'EMPENHO', codigo: '1111', numero: '1054/2026', data, valor: 1000 });
++    lancar('e2', { tipo: 'EMPENHO', codigo: '2222', numero: '1055/2026', data, valor: 2000 });
++    expect(resumirFinanceiro(contrato, historico)).toMatchObject({ saldo: 6000, saldoMigracao: 9000, solicitado: 3000 });
++    lancar('ce1', { tipo: 'CONFIRMAR_EMPENHO', empenhoId: 'e1', data });
++    lancar('ce2', { tipo: 'CONFIRMAR_EMPENHO', empenhoId: 'e2', data });
++    lancar('a1', { tipo: 'ANULACAO', empenhoId: 'e1', data: '2026-12-12', valor: 500 });
++    expect(resumirFinanceiro(contrato, historico)).toMatchObject({ saldo: 6000, saldoMigracao: 6000, dotacoes: [{ saldo: 3500 }, { saldo: 2500 }] });
++    expect(validarMovimento(contrato, historico, { tipo: 'ANULACAO', empenhoId: 'e1', data, valor: 600 })).toBeTruthy();
++    lancar('ca1', { tipo: 'CONFIRMAR_ANULACAO', anulacaoId: 'a1', data: '2026-12-12' });
++    expect(resumirFinanceiro(contrato, historico)).toMatchObject({ saldo: 6500, saldoMigracao: 6500, empenhado: 3000, anulado: 500,
++      dotacoes: [{ saldo: 4000 }, { saldo: 2500 }] });
++  });
++
++  it('aplica renovação e bloqueia empenho fora da vigência ou acima da dotação', () => {
++    const lancamento: Movimento = { tipo: 'EMPENHO', codigo: '1111', numero: '99', data: '2027-01-01', valor: 1000 };
++    const historico: Lancamento[] = [{ id: 'd1', tipo: 'DOTACAO', codigo: '1111', valor: 1500 }];
++    expect(validarMovimento(contrato, historico, lancamento)).toMatch(/vigência/);
++    const aditivo: Lancamento = { id: 'a1', tipo: 'ADITIVO', numero: 'ADT4', modalidade: 'RENOVACAO',
++      data: '2026-12-01', fim: '2027-01-31', valor: 0, descricao: 'Prorrogação' };
++    expect(validarMovimento(contrato, historico, aditivo)).toBeUndefined();
++    historico.push(aditivo);
++    expect(validarMovimento(contrato, historico, lancamento)).toBeUndefined();
++    expect(validarMovimento(contrato, historico, { ...lancamento, valor: 1600 })).toMatch(/Saldo insuficiente/);
++  });
++
++  it('dá leitura ao observador de contratos e mantém a gravação restrita', async () => {
++    const app = criarApp();
++    const caminho = '/contratos/contrato-1/financeiro';
++    const observador = auth('OPERADOR', { permissoes: ['CONTRATOS_FINANCEIRO_CONSULTAR'] });
++    prismaMock.contrato.findUnique.mockResolvedValue({ numero: '001', valorTotal: 90, ativo: true, status: 'ATIVO',
++      vigenciaInicio: new Date(contrato.inicio), vigenciaFim: new Date(contrato.fim), movimentos: [] } as never);
++    expect((await request(app).get(caminho).set(observador)).body).toMatchObject({ total: 9000, saldo: 9000 });
++    expect((await request(app).post(caminho).set(observador).send({ tipo: 'DOTACAO', codigo: '1111', valor: 4500 })).status).toBe(403);
++    expect((await request(app).get(caminho).set(auth('TERCEIRIZADA'))).status).toBe(403);
++    prismaMock.contratoMovimento.create.mockResolvedValue({ id: 'd1' } as never);
++    const fiscal = auth('OPERADOR', { permissoes: ['MANUTENCAO_FISCALIZAR'] });
++    const resposta = await request(app).post(caminho).set(fiscal).send({ tipo: 'DOTACAO', codigo: '1111', valor: 4500 });
++    expect(resposta.status).toBe(201);
++    expect(resposta.body.dotacoes).toEqual([{ codigo: '1111', valor: 4500, saldo: 4500 }]);
++  });
++});
+diff --git a/backend/tests/permissoes.test.ts b/backend/tests/permissoes.test.ts
+index 03c6224..4bc40a1 100644
+--- a/backend/tests/permissoes.test.ts
++++ b/backend/tests/permissoes.test.ts
+@@ -43,7 +43,7 @@ describe('Permissões do Operador', () => {
+     prismaMock.manutencao.findMany.mockResolvedValue([] as never);
+     mockUsuarioFindFirst(prismaMock.usuario.findFirst);
+     // Leitura de contratos também vale para quem consulta chamados (para triar, avaliar e escolher o item do contrato)
+-    const tambem: Record<string, string[]> = { '/contratos': ['MANUTENCAO_CONSULTAR', 'MANUTENCAO_AVALIAR'] };
++    const tambem: Record<string, string[]> = { '/contratos': ['MANUTENCAO_CONSULTAR', 'MANUTENCAO_AVALIAR', 'MANUTENCAO_FISCALIZAR', 'CONTRATOS_FINANCEIRO_CONSULTAR'] };
+     const casos: Array<[string, string]> = [
+       ['/atas', 'ATAS_GERENCIAR'],
+       ['/contratos', 'CONTRATOS_GERENCIAR'],
+diff --git a/frontend/src/App.tsx b/frontend/src/App.tsx
+index e235c28..b8cbd29 100644
+--- a/frontend/src/App.tsx
++++ b/frontend/src/App.tsx
+@@ -17,6 +17,7 @@ import { Estoque } from './pages/Estoque';
+ import { Atas } from './pages/Atas';
+ import { AtaFormulario } from './pages/AtaFormulario';
+ import { Contratos } from './pages/Contratos';
++import { ContratoFinanceiro } from './pages/ContratoFinanceiro';
+ import { ContratoFormulario } from './pages/ContratoFormulario';
+ import { MovimentacaoEstoque } from './pages/MovimentacaoEstoque';
+ import { Conversas, ConversaPagina } from './pages/conversas/Conversas';
+@@ -155,8 +156,9 @@ function RotasProtegidas() {
+           <Route path="/atas/nova" element={<RotaRestrita perfis={['OPERADOR']} permissoes={['ATAS_GERENCIAR']}><AtaFormulario /></RotaRestrita>} />
+           <Route path="/atas/:id" element={<RotaRestrita perfis={['OPERADOR']} permissoes={['ATAS_GERENCIAR']}><AtaFormulario /></RotaRestrita>} />
+           <Route path="/contratos" element={<RotaRestrita perfis={['OPERADOR', 'TERCEIRIZADA']} permissoes={['CONTRATOS_GERENCIAR', 'MANUTENCAO_CONSULTAR']}><Contratos /></RotaRestrita>} />
+-          <Route path="/contratos/novo" element={<RotaRestrita perfis={['OPERADOR', 'TERCEIRIZADA']} permissoes={['CONTRATOS_GERENCIAR', 'MANUTENCAO_CONSULTAR']}><ContratoFormulario /></RotaRestrita>} />
+-          <Route path="/contratos/:id" element={<RotaRestrita perfis={['OPERADOR', 'TERCEIRIZADA']} permissoes={['CONTRATOS_GERENCIAR', 'MANUTENCAO_CONSULTAR']}><ContratoFormulario /></RotaRestrita>} />
++          <Route path="/contratos/novo" element={<RotaRestrita perfis={['OPERADOR', 'TERCEIRIZADA']} permissoes={['CONTRATOS_GERENCIAR', 'MANUTENCAO_CONSULTAR', 'MANUTENCAO_FISCALIZAR', 'CONTRATOS_FINANCEIRO_CONSULTAR']}><ContratoFormulario /></RotaRestrita>} />
++          <Route path="/contratos/:id/financeiro" element={<Restrita permissoes={['CONTRATOS_GERENCIAR', 'MANUTENCAO_FISCALIZAR', 'CONTRATOS_FINANCEIRO_CONSULTAR']}><ContratoFinanceiro /></Restrita>} />
++          <Route path="/contratos/:id" element={<RotaRestrita perfis={['OPERADOR', 'TERCEIRIZADA']} permissoes={['CONTRATOS_GERENCIAR', 'MANUTENCAO_CONSULTAR', 'MANUTENCAO_FISCALIZAR', 'CONTRATOS_FINANCEIRO_CONSULTAR']}><ContratoFormulario /></RotaRestrita>} />
+           <Route path="/usuarios" element={<Navigate to="/configuracoes/usuarios" replace />} />
+           <Route path="*" element={<Navigate to="/" replace />} />
+         </Route>
+diff --git a/frontend/src/components/Layout.tsx b/frontend/src/components/Layout.tsx
+index d9cc860..adf9074 100644
+--- a/frontend/src/components/Layout.tsx
++++ b/frontend/src/components/Layout.tsx
+@@ -55,7 +55,7 @@ const TABS: TabDef[] = [
+     sub: [{ para: '/programacoes/preventivas', rotulo: 'Cronograma preventivas' }, { para: '/programacoes/layout', rotulo: 'Alteração de layout' }] },
+   { para: '/estoque', rotulo: 'Estoque', icone: <IconeEstoque />, perfis: ['OPERADOR', 'GALPAO'], permissoes: ['ESTOQUE_GERENCIAR'] },
+   { para: '/atas', rotulo: 'Atas', icone: <IconeAtas />, perfis: ['OPERADOR'], permissoes: ['ATAS_GERENCIAR'] },
+-  { para: '/contratos', rotulo: 'Contratos', icone: <IconeContratos />, perfis: ['OPERADOR', 'TERCEIRIZADA'], permissoes: ['CONTRATOS_GERENCIAR', 'MANUTENCAO_CONSULTAR'] },
++  { para: '/contratos', rotulo: 'Contratos', icone: <IconeContratos />, perfis: ['OPERADOR', 'TERCEIRIZADA'], permissoes: ['CONTRATOS_GERENCIAR', 'MANUTENCAO_CONSULTAR', 'MANUTENCAO_FISCALIZAR', 'CONTRATOS_FINANCEIRO_CONSULTAR'] },
+   {
+     para: '/relatorios',
+     rotulo: 'Relatórios',
+diff --git a/frontend/src/pages/ContratoFinanceiro.tsx b/frontend/src/pages/ContratoFinanceiro.tsx
+new file mode 100644
+index 0000000..6e8440b
+--- /dev/null
++++ b/frontend/src/pages/ContratoFinanceiro.tsx
+@@ -0,0 +1,198 @@
++import { type FormEvent, useEffect, useState } from 'react';
++import { Link, useParams } from 'react-router-dom';
++import { api } from '../api/client';
++import { useAuth } from '../auth/AuthContext';
++import { pode } from '../utils/permissoes';
++import { formatarMoeda } from '../utils/format';
++import './PlanejamentoManutencao.css';
++
++interface Dotacao { codigo: string; valor: number; saldo: number }
++interface Empenho { id: string; codigo: string; numero: string; data: string; valor: number; anulado: number; confirmadoEm?: string }
++interface Anulacao { id: string; empenhoId: string; data: string; valor: number; confirmadaEm?: string }
++interface Aditivo { id: string; numero: string; modalidade: keyof typeof modalidades; data: string; valor: number; fim?: string; descricao: string }
++interface Resumo {
++  numero: string; inicio: string; fim: string; vigente: boolean; ativo: boolean; total: number; saldo: number;
++  saldoMigracao: number; solicitado: number; empenhado: number; anulado: number;
++  dotacoes: Dotacao[]; empenhos: Empenho[]; anulacoes: Anulacao[]; aditivos: Aditivo[];
++}
++
++const modalidades = { RENOVACAO: 'Renovação', ACRESCIMO: 'Acréscimo', SUPRESSAO: 'Supressão' };
++const acoes = {
++  DOTACAO: 'Cadastrar dotação', EMPENHO: 'Solicitar empenho', CONFIRMAR_EMPENHO: 'Confirmar empenho',
++  ANULACAO: 'Solicitar anulação', CONFIRMAR_ANULACAO: 'Encerrar anulação', ADITIVO: 'Registrar aditivo',
++};
++type Acao = keyof typeof acoes;
++const dinheiro = (centavos: number) => formatarMoeda(centavos / 100);
++const dia = (data: string) => data.split('-').reverse().join('/');
++
++export function ContratoFinanceiro() {
++  const { id } = useParams();
++  const { usuario } = useAuth();
++  const podeEditar = pode(usuario, 'CONTRATOS_GERENCIAR', 'MANUTENCAO_FISCALIZAR');
++  const caminho = `/contratos/${id}/financeiro`;
++  const [resumo, setResumo] = useState<Resumo | null>(null);
++  const [erro, setErro] = useState('');
++  const [gravando, setGravando] = useState(false);
++  const [aba, setAba] = useState('empenhos');
++  const [acao, setAcao] = useState<{ tipo: Acao; alvo?: string }>();
++  const [modalidade, setModalidade] = useState('RENOVACAO');
++  const [busca, setBusca] = useState('');
++
++  useEffect(() => {
++    let ativo = true;
++    api.get<Resumo>(caminho).then((dados) => { if (ativo) setResumo(dados); })
++      .catch((falha: Error) => { if (ativo) setErro(falha.message); });
++    return () => { ativo = false; };
++  }, [caminho]);
++
++  function iniciar(tipo: Acao, alvo?: string) {
++    setErro('');
++    setModalidade('RENOVACAO');
++    setAcao({ tipo, alvo });
++  }
++
++  async function gravar(evento: FormEvent<HTMLFormElement>) {
++    evento.preventDefault();
++    if (!acao || gravando) return;
++    const form = new FormData(evento.currentTarget);
++    const ler = (campo: string) => String(form.get(campo) ?? '').trim();
++    const dados = {
++      tipo: acao.tipo,
++      ...(form.has('data') && { data: ler('data') }),
++      ...(form.has('valor') && { valor: Math.round(Number(ler('valor')) * 100) }),
++      ...(ler('codigo') && { codigo: ler('codigo') }),
++      ...(form.has('numero') && { numero: ler('numero') }),
++      ...(form.has('descricao') && { descricao: ler('descricao'), modalidade }),
++      ...(ler('fim') && { fim: ler('fim') }),
++      ...(acao.tipo === 'CONFIRMAR_ANULACAO' ? { anulacaoId: acao.alvo } : { empenhoId: acao.alvo }),
++    };
++    setErro('');
++    setGravando(true);
++    try {
++      setResumo(await api.post<Resumo>(caminho, dados));
++      setAcao(undefined);
++    } catch (falha) {
++      setErro(falha instanceof Error ? falha.message : 'Não foi possível registrar o lançamento.');
++    } finally {
++      setGravando(false);
++    }
++  }
++
++  async function alternarHabilitacao(ativo: boolean) {
++    if (gravando) return;
++    setErro('');
++    setGravando(true);
++    try {
++      setResumo(await api.patch<Resumo>(`${caminho}/habilitacao`, { ativo }));
++    } catch (falha) {
++      setErro(falha instanceof Error ? falha.message : 'Não foi possível alterar o contrato.');
++    } finally {
++      setGravando(false);
++    }
++  }
++
++  const tipo = acao?.tipo;
++  const temValor = tipo === 'DOTACAO' || tipo === 'EMPENHO' || tipo === 'ANULACAO' || tipo === 'ADITIVO';
++  const selecionado = resumo?.empenhos.find((item) => item.id === acao?.alvo);
++  const termo = busca.trim().toLocaleLowerCase('pt-BR');
++
++  return <section className="gestao-page" aria-labelledby="financeiro-titulo">
++    <header className="page-header">
++      <h2 id="financeiro-titulo">Financeiro {resumo && `do contrato ${resumo.numero}`}</h2>
++      <Link className="btn btn-outline" to={`/contratos/${id}`}>Voltar ao contrato</Link>
++    </header>
++    {!resumo && !erro && <p role="status">Carregando financeiro…</p>}
++    {erro && !acao && <p role="alert">{erro}</p>}
++    {resumo && <>
++      <section className="equipamento-secao" aria-label="Saldos do contrato">
++        <div className="planejamento-item-topo">
++          <p>Vigência de {dia(resumo.inicio)} a {dia(resumo.fim)}{!resumo.vigente && ' · Contrato inativo ou expirado'}</p>
++          {podeEditar && <button className="btn btn-outline" type="button" disabled={gravando || Boolean(acao)}
++            onClick={() => void alternarHabilitacao(!resumo.ativo)}>{resumo.ativo ? 'Desativar contrato' : 'Reativar contrato'}</button>}
++        </div>
++        <dl className="planejamento-filtros">
++          {[
++            ['Valor contratual atualizado', resumo.total], ['Solicitado', resumo.solicitado], ['Empenhado bruto', resumo.empenhado],
++            ['Anulado confirmado', resumo.anulado], ['Saldo a empenhar', resumo.saldo], ['Saldo para migração', resumo.saldoMigracao],
++          ].map(([rotulo, centavos]) => <div key={rotulo}><dt>{rotulo}</dt><dd>{dinheiro(Number(centavos))}</dd></div>)}
++        </dl>
++        <small>O saldo para migração desconta os empenhos confirmados e soma as anulações encerradas.</small>
++      </section>
++      <div className="actions-row" role="group" aria-label="Seções financeiras">
++        {Object.entries({ empenhos: 'Empenhos', dotacoes: 'Dotações', aditivos: 'Aditivos' }).map(([valor, rotulo]) =>
++          <button key={valor} className="btn btn-outline" type="button" aria-pressed={aba === valor} disabled={gravando}
++            onClick={() => { setAba(valor); setAcao(undefined); setErro(''); }}>{rotulo}</button>)}
++      </div>
++      <section className="equipamento-secao planejamento-lista" aria-label="Lançamentos financeiros">
++        {aba === 'empenhos' && <>
++          <div className="planejamento-item-topo"><h3>Empenhos</h3>
++            {podeEditar && <button className="btn btn-primary" disabled={gravando || !resumo.vigente || !resumo.dotacoes.length}
++              onClick={() => iniciar('EMPENHO')}>Solicitar empenho</button>}</div>
++          {!resumo.dotacoes.length && <p>Cadastre uma dotação para solicitar empenho.</p>}
++          <div className="field"><label htmlFor="busca-empenho">Buscar por número ou dotação</label>
++            <input id="busca-empenho" value={busca} onChange={(e) => setBusca(e.target.value)} /></div>
++          {!resumo.empenhos.length && <p>Nenhum empenho registrado.</p>}
++          {resumo.empenhos.filter((item) => `${item.numero} ${item.codigo}`.toLocaleLowerCase('pt-BR').includes(termo)).map((item) =>
++            <article className="planejamento-item" key={item.id}>
++              <strong>{item.numero} · {dinheiro(item.valor)}</strong>
++              <p>Dotação {item.codigo} · Solicitado em {dia(item.data)}{item.confirmadoEm && ` · Confirmado em ${dia(item.confirmadoEm)}`}</p>
++              {resumo.anulacoes.filter((anulacao) => anulacao.empenhoId === item.id).map((anulacao) =>
++                <p key={anulacao.id}>Anulação de {dinheiro(anulacao.valor)} solicitada em {dia(anulacao.data)}
++                  {anulacao.confirmadaEm ? ` · Encerrada em ${dia(anulacao.confirmadaEm)}` : podeEditar && <>
++                    {' '}<button className="btn btn-outline" disabled={gravando} onClick={() => iniciar('CONFIRMAR_ANULACAO', anulacao.id)}>Encerrar anulação</button>
++                  </>}
++                </p>)}
++              {podeEditar && (item.confirmadoEm
++                ? <button className="btn btn-outline" disabled={gravando || item.anulado >= item.valor} onClick={() => iniciar('ANULACAO', item.id)}>Solicitar anulação</button>
++                : <button className="btn btn-outline" disabled={gravando} onClick={() => iniciar('CONFIRMAR_EMPENHO', item.id)}>Confirmar empenho</button>)}
++            </article>)}
++        </>}
++        {aba === 'dotacoes' && <>
++          <div className="planejamento-item-topo"><h3>Dotações</h3>
++            {podeEditar && <button className="btn btn-primary" disabled={gravando} onClick={() => iniciar('DOTACAO')}>Cadastrar dotação</button>}</div>
++          {!resumo.dotacoes.length && <p>Nenhuma dotação cadastrada.</p>}
++          {resumo.dotacoes.map((item) => <p key={item.codigo}><strong>{item.codigo}</strong> · {dinheiro(item.valor)}
++            {' '}({resumo.total ? (item.valor * 100 / resumo.total).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : 0}%) · Saldo {dinheiro(item.saldo)}</p>)}
++        </>}
++        {aba === 'aditivos' && <>
++          <div className="planejamento-item-topo"><h3>Aditivos</h3>
++            {podeEditar && <button className="btn btn-primary" disabled={gravando} onClick={() => iniciar('ADITIVO')}>Registrar aditivo</button>}</div>
++          {!resumo.aditivos.length && <p>Nenhum aditivo registrado.</p>}
++          {resumo.aditivos.map((item) => <article key={item.id}>
++            <strong>{item.numero} · {modalidades[item.modalidade]} · {dia(item.data)}</strong>
++            <p>{item.descricao} · {dinheiro(item.valor)}{item.fim && ` · Vigência até ${dia(item.fim)}`}</p>
++          </article>)}
++        </>}
++      </section>
++      {acao && <form className="equipamento-secao planejamento-formulario" onSubmit={gravar} key={`${tipo}-${acao.alvo ?? ''}`}>
++        <h3>{acoes[acao.tipo]}{selecionado && ` · ${selecionado.numero}`}</h3>
++        {tipo === 'ADITIVO' && <div className="field"><label htmlFor="fin-modalidade">Tipo de aditivo</label>
++          <select id="fin-modalidade" value={modalidade} onChange={(e) => setModalidade(e.target.value)}>
++            {Object.entries(modalidades).map(([codigo, rotulo]) => <option key={codigo} value={codigo}>{rotulo}</option>)}
++          </select></div>}
++        {(tipo === 'EMPENHO' || tipo === 'ADITIVO') && <div className="field"><label htmlFor="fin-numero">Número</label>
++          <input id="fin-numero" name="numero" maxLength={80} required /></div>}
++        {tipo === 'DOTACAO' && <div className="field"><label htmlFor="fin-codigo">Código da dotação</label>
++          <input id="fin-codigo" name="codigo" maxLength={80} required /></div>}
++        {(tipo === 'EMPENHO' || (tipo === 'ADITIVO' && modalidade === 'SUPRESSAO')) && <div className="field">
++          <label htmlFor="fin-dotacao">Dotação</label><select id="fin-dotacao" name="codigo" required={tipo === 'EMPENHO'}>
++            <option value="">{tipo === 'EMPENHO' ? 'Selecione' : 'Valor ainda não distribuído'}</option>
++            {resumo.dotacoes.map((dotacao) => <option value={dotacao.codigo} key={dotacao.codigo}>{dotacao.codigo} · {dinheiro(dotacao.saldo)}</option>)}
++          </select></div>}
++        {tipo !== 'DOTACAO' && <div className="field"><label htmlFor="fin-data">{tipo === 'EMPENHO' || tipo === 'ANULACAO' ? 'Data da solicitação' : 'Data do registro'}</label>
++          <input id="fin-data" name="data" type="date" required min={tipo === 'EMPENHO' ? resumo.inicio : undefined} max={tipo === 'EMPENHO' ? resumo.fim : undefined} /></div>}
++        {temValor && <div className="field"><label htmlFor="fin-valor">Valor (R$)</label>
++          <input id="fin-valor" name="valor" type="number" step="0.01" min={tipo === 'ADITIVO' && modalidade === 'RENOVACAO' ? '0' : '0.01'} required /></div>}
++        {tipo === 'ADITIVO' && modalidade === 'RENOVACAO' && <div className="field">
++          <label htmlFor="fin-fim">Novo fim da vigência</label><input id="fin-fim" name="fim" type="date" required /></div>}
++        {tipo === 'ADITIVO' && <div className="field"><label htmlFor="fin-descricao">Descrição do aditivo</label>
++          <textarea id="fin-descricao" name="descricao" minLength={2} maxLength={1000} required /></div>}
++        {erro && <p role="alert">{erro}</p>}
++        <div className="actions-row">
++          <button type="button" className="btn btn-outline" disabled={gravando} onClick={() => { setAcao(undefined); setErro(''); }}>Cancelar</button>
++          <button className="btn btn-primary" disabled={gravando}>Salvar lançamento</button>
++        </div>
++      </form>}
++    </>}
++  </section>;
++}
+diff --git a/frontend/src/pages/ContratoFormulario.tsx b/frontend/src/pages/ContratoFormulario.tsx
+index d1bc990..ac6d46d 100644
+--- a/frontend/src/pages/ContratoFormulario.tsx
++++ b/frontend/src/pages/ContratoFormulario.tsx
+@@ -1,6 +1,6 @@
+ import { pode } from '../utils/permissoes';
+ import { CSSProperties, FormEvent, useEffect, useState } from 'react';
+-import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
++import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
+ import { api } from '../api/client';
+ import { useAuth } from '../auth/AuthContext';
+ import { useMensagemTemporaria } from '../hooks/useMensagemTemporaria';
+@@ -17,6 +17,9 @@ interface ItemForm {
+   descontoPercentual: string;
+   // Só para itens já gravados: valor menos o já comprometido pelas manutenções
+   saldo?: number;
++  modalidade?: 'CIVIL' | 'EQUIPAMENTO' | '';
++  categoriaId?: string;
++  nomeCategoria?: string;
+ }
+ 
+ const ITEM_VAZIO: ItemForm = { servicoId: '', valor: '', descontoPercentual: '0' };
+@@ -29,6 +32,7 @@ const VAZIO = {
+   vigenciaInicio: '',
+   vigenciaFim: '',
+   status: 'ATIVO',
++  ativo: true,
+   itens: [{ ...ITEM_VAZIO }] as ItemForm[],
+ };
+ 
+@@ -60,6 +64,16 @@ export function ContratoFormulario() {
+   const [form, setForm] = useState(VAZIO);
+   const [prestadores, setPrestadores] = useState<PrestadorServico[]>([]);
+   const [servicos, setServicos] = useState<ServicoContrato[]>([]);
++  const [categorias, setCategorias] = useState<{ CIVIL: Array<{ id: string; nome: string }>; EQUIPAMENTO: Array<{ id: string; nome: string }> } | null>(null);
++  const precisaCategorias = form.itens.some((item) => item.modalidade);
++  useEffect(() => {
++    if (!podeGerenciar || !precisaCategorias || categorias) return;
++    let ativo = true;
++    Promise.all([api.get<Array<{ id: string; nome: string }>>('/categorias-civis'), api.get<Array<{ id: string; nome: string }>>('/categorias')])
++      .then(([CIVIL, EQUIPAMENTO]) => { if (ativo) setCategorias({ CIVIL, EQUIPAMENTO }); })
++      .catch(() => { if (ativo) setCatalogosFalha(true); });
++    return () => { ativo = false; };
++  }, [podeGerenciar, precisaCategorias, categorias]);
+   const [catalogosFalha, setCatalogosFalha] = useState(false);
+ 
+   useEffect(() => {
+@@ -95,7 +109,7 @@ export function ContratoFormulario() {
+           setFalha('Contrato não encontrado.');
+           return;
+         }
+-        const valores = {
++        const valores: typeof VAZIO = {
+           numero: c.numero,
+           prestadorId: c.prestadorId,
+           objeto: c.objeto,
+@@ -103,12 +117,16 @@ export function ContratoFormulario() {
+           vigenciaInicio: c.vigenciaInicio.slice(0, 10),
+           vigenciaFim: c.vigenciaFim.slice(0, 10),
+           status: c.status,
++          ativo: c.ativo !== false,
+           // Contrato antigo, sem itens, abre sem linhas até que o gestor os informe
+           itens: c.itens.map((i) => ({
+             servicoId: i.servicoId,
+             valor: String(i.valor),
+             descontoPercentual: String(Number(i.descontoPercentual ?? 0)),
+             saldo: i.saldo,
++            modalidade: i.modalidade ?? '',
++            categoriaId: i.categoriaCivilId ?? i.categoriaEquipamentoId ?? '',
++            nomeCategoria: i.categoriaCivil?.nome ?? i.categoriaEquipamento?.nome,
+           })),
+         };
+         setContrato(c);
+@@ -173,10 +191,13 @@ export function ContratoFormulario() {
+       vigenciaInicio: form.vigenciaInicio,
+       vigenciaFim: form.vigenciaFim,
+       status: form.status,
++      ...(editando && form.ativo !== inicial.ativo && { ativo: form.ativo }),
+       itens: form.itens.map((i) => ({
+         servicoId: i.servicoId,
+         valor: Number(i.valor),
+         descontoPercentual: Number(i.descontoPercentual) || 0,
++        ...((i.modalidade || inicial.itens.some((item) => item.servicoId === i.servicoId && item.modalidade))
++          && { modalidade: i.modalidade || null, categoriaId: i.categoriaId || null }),
+       })),
+     };
+     try {
+@@ -216,6 +237,9 @@ export function ContratoFormulario() {
+           <h2 id="contrato-titulo">{editando ? `Contrato ${contrato?.numero ?? ''}`.trim() : 'Novo contrato'}</h2>
+         </div>
+         <div className="novo-equipamento-acoes">
++          {contrato && pode(usuario, 'CONTRATOS_GERENCIAR', 'MANUTENCAO_FISCALIZAR', 'CONTRATOS_FINANCEIRO_CONSULTAR') && (
++            <Link className="btn btn-outline" to={`/contratos/${contrato.id}/financeiro`}>Empenhos e aditivos</Link>
++          )}
+           {editando && podeExcluir && contrato && (
+             <button type="button" className="btn btn-outline" disabled={enviando} onClick={excluir}>
+               Excluir
+@@ -292,6 +316,10 @@ export function ContratoFormulario() {
+                 ))}
+               </select>
+             </div>
++            {editando && <label className="checkbox-linha">
++              <input type="checkbox" checked={form.ativo} disabled={bloqueado}
++                onChange={(e) => setForm({ ...form, ativo: e.target.checked })} /> Contrato habilitado para uso
++            </label>}
+             <div className="field novo-equipamento-largura-total">
+               <label htmlFor="ct-objeto">Descrição</label>
+               <textarea
+@@ -421,6 +449,25 @@ export function ContratoFormulario() {
+                     <span />
+                   )}
+                 </div>
++                {(!somenteLeitura || item.modalidade) && <div className="actions-row" style={{ gridColumn: '1 / -1', justifyContent: 'flex-start' }}>
++                  <label className="field">Modalidade
++                    <select value={item.modalidade ?? ''} disabled={bloqueado}
++                      onChange={(e) => editarItem(i, { modalidade: e.target.value as ItemForm['modalidade'], categoriaId: '', nomeCategoria: undefined })}>
++                      <option value="">Sem classificação</option>
++                      <option value="CIVIL">Civil</option>
++                      <option value="EQUIPAMENTO">Equipamentos</option>
++                    </select>
++                  </label>
++                  {item.modalidade && <label className="field">Categoria do item
++                    <select value={item.categoriaId ?? ''} required disabled={bloqueado}
++                      onChange={(e) => editarItem(i, { categoriaId: e.target.value })}>
++                      <option value="">Selecione</option>
++                      {item.categoriaId && !categorias?.[item.modalidade].some((categoria) => categoria.id === item.categoriaId) &&
++                        <option value={item.categoriaId}>{item.nomeCategoria ?? 'Categoria vinculada'}</option>}
++                      {categorias?.[item.modalidade].map((categoria) => <option key={categoria.id} value={categoria.id}>{categoria.nome}</option>)}
++                    </select>
++                  </label>}
++                </div>}
+               </div>
+             ))}
+           </div>
+diff --git a/frontend/src/pages/Contratos.tsx b/frontend/src/pages/Contratos.tsx
+index 51a0d12..19eb4ca 100644
+--- a/frontend/src/pages/Contratos.tsx
++++ b/frontend/src/pages/Contratos.tsx
+@@ -21,7 +21,7 @@ const VISUALIZACOES = [
+ export function Contratos() {
+   const { usuario } = useAuth();
+   const permitido =
+-    pode(usuario, 'CONTRATOS_GERENCIAR', 'MANUTENCAO_CONSULTAR') || usuario?.perfil === 'TERCEIRIZADA';
++    pode(usuario, 'CONTRATOS_GERENCIAR', 'MANUTENCAO_CONSULTAR', 'MANUTENCAO_FISCALIZAR', 'CONTRATOS_FINANCEIRO_CONSULTAR') || usuario?.perfil === 'TERCEIRIZADA';
+   // A terceirizada consulta os contratos do próprio prestador, sem cadastrar nem editar
+   const somenteLeitura = usuario?.perfil === 'TERCEIRIZADA' || (usuario?.perfil === 'OPERADOR' && !pode(usuario, 'CONTRATOS_GERENCIAR'));
+   const [contratos, setContratos] = useState<Contrato[]>([]);
+diff --git a/frontend/src/pages/Solicitacoes.tsx b/frontend/src/pages/Solicitacoes.tsx
+index 6c3cb6d..6af22f0 100644
+--- a/frontend/src/pages/Solicitacoes.tsx
++++ b/frontend/src/pages/Solicitacoes.tsx
+@@ -138,6 +138,7 @@ interface LinhaLista {
+   rotuloLink: string;
+   emenda: boolean;
+   automatica: boolean;
++  semCoberturaContrato?: boolean;
+   destaque?: ReturnType<typeof destaqueTriagem>;
+ }
+ 
+@@ -191,6 +192,7 @@ const daManutencao = (m: Manutencao): LinhaLista => ({
+   emenda: false,
+   automatica: false,
+   destaque: destaqueTriagem(m),
++  semCoberturaContrato: m.semCoberturaContrato,
+ });
+ 
+ const normalizarBusca = (texto: string) =>
+@@ -392,7 +394,10 @@ export function Solicitacoes() {
+       l.categoria, l.servico, l.prestador?.nome, l.statusTexto, l.tipoTexto, ...l.termosExtras].filter(Boolean).join(' '));
+     return termos.every((termo) => indice.includes(termo));
+   });
+-  const incluiSituacao = situacoes.find(({ id }) => id === filtroSituacao)?.inclui;
++  const indicadores = podeTriar ? [...situacoes, {
++    id: 'sem-cobertura', nome: 'Sem cobertura contratual', inclui: (linha: LinhaLista) => Boolean(linha.semCoberturaContrato),
++  }] : situacoes;
++  const incluiSituacao = indicadores.find(({ id }) => id === filtroSituacao)?.inclui;
+   const solicitacoesExibidas = incluiSituacao ? selecao.filter(incluiSituacao) : selecao;
+ 
+   function limparFiltros() {
+@@ -474,7 +479,7 @@ export function Solicitacoes() {
+         <div className="chamados-painel-resumo">
+           <h3 id="chamados-painel-titulo">Painel de chamados</h3>
+           <div className="chamados-indicadores">
+-            {situacoes.map(({ id, nome, inclui }) => (
++            {indicadores.map(({ id, nome, inclui }) => (
+               <button key={id} type="button" aria-pressed={filtroSituacao === id}
+                 disabled={carregando || falhaCarregamento} onClick={() => setFiltroSituacao(id)}>
+                 <span>{nome}</span>
+@@ -709,6 +714,7 @@ export function Solicitacoes() {
+                       <span className="inventario-data">{l.tipoTexto}</span>
+                       <small className="chamados-tipo-detalhe">{l.categoria}{l.servico !== l.tipoTexto && ` · ${l.servico}`}</small>
+                       {l.prestador && <small className="chamados-tipo-detalhe">{l.prestador.nome}</small>}
++                      {podeTriar && l.semCoberturaContrato && <span className="badge badge-gray solicitacoes-selo">Sem cobertura cadastrada</span>}
+                       {naTriagem && l.destaque?.nome && <span className="badge badge-gray solicitacoes-selo">{l.destaque.nome}</span>}
+                       {l.emenda && <span className="badge badge-purple solicitacoes-selo">Emenda</span>}
+                       {l.automatica && <span className="badge badge-gray solicitacoes-selo">Automática</span>}
+diff --git a/frontend/src/types.ts b/frontend/src/types.ts
+index 2bf52cd..88f6aaa 100644
+--- a/frontend/src/types.ts
++++ b/frontend/src/types.ts
+@@ -235,6 +235,7 @@ export interface EventoManutencao {
+ }
+ 
+ export interface Manutencao {
++  semCoberturaContrato?: boolean;
+   id: string;
+   numero: number;
+   tipo: TipoManutencao;
+@@ -515,6 +516,11 @@ export interface RelatorioCessoes {
+ export type StatusContrato = 'ATIVO' | 'RENOVACAO_PENDENTE' | 'EXPIRADO';
+ 
+ export interface ContratoItem {
++  modalidade?: TipoManutencao | null;
++  categoriaCivilId?: string | null;
++  categoriaEquipamentoId?: string | null;
++  categoriaCivil?: { id: string; nome: string } | null;
++  categoriaEquipamento?: { id: string; nome: string } | null;
+   id: string;
+   servicoId: string;
+   valor: string;
+diff --git a/frontend/src/utils/permissoes.ts b/frontend/src/utils/permissoes.ts
+index 6ad79e8..5bcc5d7 100644
+--- a/frontend/src/utils/permissoes.ts
++++ b/frontend/src/utils/permissoes.ts
+@@ -15,7 +15,8 @@ export const GRUPOS_PERMISSOES = [
+       { id: 'MANUTENCAO_FISCALIZAR', rotulo: 'Fiscalizar' },
+     ],
+   },
+-  { grupo: 'Contratos', permissoes: [{ id: 'CONTRATOS_GERENCIAR', rotulo: 'Gerenciar contratos' }] },
++  { grupo: 'Contratos', permissoes: [{ id: 'CONTRATOS_GERENCIAR', rotulo: 'Gerenciar contratos' },
++    { id: 'CONTRATOS_FINANCEIRO_CONSULTAR', rotulo: 'Consultar dotações, empenhos e aditivos' }] },
+   { grupo: 'Atas', permissoes: [{ id: 'ATAS_GERENCIAR', rotulo: 'Gerenciar atas' }] },
+   { grupo: 'Estoque', permissoes: [{ id: 'ESTOQUE_GERENCIAR', rotulo: 'Gerenciar estoque' }] },
+   { grupo: 'Relatórios', permissoes: [{ id: 'RELATORIOS_VISUALIZAR', rotulo: 'Visualizar relatórios' }] },
+-- 
+2.47.2
+
